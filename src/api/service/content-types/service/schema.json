@@ -1,0 +1,30 @@
+{
+  "kind": "collectionType",
+  "collectionName": "services",
+  "info": {
+    "singularName": "service",
+    "pluralName": "services",
+    "displayName": "services"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "id_service": {
+      "type": "uid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "companies": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::company.company",
+      "mappedBy": "services"
+    }
+  }
+}

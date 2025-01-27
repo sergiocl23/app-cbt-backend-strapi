@@ -1,0 +1,28 @@
+{
+  "kind": "collectionType",
+  "collectionName": "tags",
+  "info": {
+    "singularName": "tag",
+    "pluralName": "tags",
+    "displayName": "tags",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "name": {
+      "type": "string"
+    },
+    "id_tag": {
+      "type": "uid"
+    },
+    "noticias": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::noticia.noticia",
+      "mappedBy": "tags"
+    }
+  }
+}

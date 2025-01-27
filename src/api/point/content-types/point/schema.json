@@ -1,0 +1,48 @@
+{
+  "kind": "collectionType",
+  "collectionName": "points",
+  "info": {
+    "singularName": "point",
+    "pluralName": "points",
+    "displayName": "points",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "id_point": {
+      "type": "uid"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "text"
+    },
+    "latitude": {
+      "type": "float"
+    },
+    "longitude": {
+      "type": "float"
+    },
+    "id_category": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::points-category.points-category",
+      "mappedBy": "points"
+    },
+    "images": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    }
+  }
+}
