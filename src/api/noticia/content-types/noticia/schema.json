@@ -4,8 +4,7 @@
   "info": {
     "singularName": "noticia",
     "pluralName": "noticias",
-    "displayName": "noticias",
-    "description": ""
+    "displayName": "Noticia"
   },
   "options": {
     "draftAndPublish": true
@@ -13,38 +12,84 @@
   "pluginOptions": {},
   "attributes": {
     "title": {
-      "type": "string"
+      "type": "string",
+      "unique": true,
+      "required": true
+    },
+    "slug": {
+      "type": "uid",
+      "targetField": "title",
+      "unique": false
     },
     "content": {
-      "type": "blocks"
-    },
-    "imagen": {
-      "type": "media",
-      "multiple": false,
-      "required": false,
-      "allowedTypes": [
-        "images",
-        "files",
-        "videos",
-        "audios"
-      ]
-    },
-    "fecha": {
-      "type": "date"
-    },
-    "autor": {
-      "type": "relation",
-      "relation": "oneToOne",
-      "target": "plugin::users-permissions.user"
+      "type": "text",
+      "required": true,
+      "maxLength": 1000000
     },
     "summary": {
-      "type": "string"
+      "type": "text",
+      "required": true,
+      "maxLength": 500
+    },
+    "mainImage": {
+      "type": "string",
+      "required": false
+    },
+    "author": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "required": false
     },
     "tags": {
       "type": "relation",
       "relation": "manyToMany",
       "target": "api::tag.tag",
-      "inversedBy": "noticias"
+      "inversedBy": "noticias",
+      "configurable": true
+    },
+    "pais": {
+      "type": "enumeration",
+      "enum": [
+        "chile",
+        "paraguay",
+        "brasil",
+        "argentina",
+        "mundo"
+      ],
+      "required": true,
+      "default": "chile",
+      "configurable": true
+    },
+    "sourceUrl": {
+      "type": "text",
+      "unique": true,
+      "required": true
+    },
+    "sourceName": {
+      "type": "string",
+      "required": true
+    },
+    "scrapedContent": {
+      "type": "text",
+      "private": true
+    },
+    "articleType": {
+      "type": "enumeration",
+      "enum": [
+        "regular",
+        "topicFeatured",
+        "topicSmall"
+      ],
+      "default": "regular",
+      "required": true
+    },
+    "publishedAt": {
+      "type": "datetime"
+    },
+    "articleDate": {
+      "type": "datetime",
+      "required": true
     }
   }
 }

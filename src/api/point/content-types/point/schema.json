@@ -22,10 +22,10 @@
       "type": "text"
     },
     "latitude": {
-      "type": "float"
+      "type": "decimal"
     },
     "longitude": {
-      "type": "float"
+      "type": "decimal"
     },
     "id_category": {
       "type": "relation",
@@ -34,15 +34,14 @@
       "mappedBy": "points"
     },
     "images": {
-      "type": "media",
-      "multiple": true,
-      "required": false,
       "allowedTypes": [
         "images",
         "files",
         "videos",
         "audios"
-      ]
+      ],
+      "type": "media",
+      "multiple": true
     }
   }
 }

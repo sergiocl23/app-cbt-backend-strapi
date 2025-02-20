@@ -96,19 +96,7 @@ logs
 results
 node_modules
 .node_history
-
-############################
-# Package managers
-############################
-
-.yarn/*
-!.yarn/cache
-!.yarn/unplugged
-!.yarn/patches
-!.yarn/releases
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
+npm-debug.log
 yarn-error.log
 
 ############################
@@ -128,4 +116,7 @@ exports
 dist
 build
 .strapi-updater.json
-.strapi-cloud.json
+.tmp/
+build/
+dist/
+exports/
