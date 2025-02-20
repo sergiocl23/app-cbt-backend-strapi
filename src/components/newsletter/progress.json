@@ -1,0 +1,45 @@
+{
+    "collectionName": "components_newsletter_progress",
+    "info": {
+      "displayName": "Progress",
+      "description": "Progreso del envío de newsletter",
+      "example": {
+        "description": "Este componente rastrea el progreso de envío de un newsletter",
+        "usage": {
+          "totalSubscribers": 1000,
+          "sentCount": 450,
+          "failedCount": 5,
+          "retryCount": 2
+        },
+        "explanation": {
+          "totalSubscribers": "Total de destinatarios del newsletter",
+          "sentCount": "Correos enviados exitosamente",
+          "failedCount": "Envíos fallidos",
+          "retryCount": "Número de reintentos realizados"
+        }
+      }
+    },
+    "options": {},
+    "attributes": {
+      "totalSubscribers": {
+        "type": "integer",
+        "required": true,
+        "min": 0
+      },
+      "sentCount": {
+        "type": "integer",
+        "default": 0,
+        "min": 0
+      },
+      "failedCount": {
+        "type": "integer",
+        "default": 0,
+        "min": 0
+      },
+      "retryCount": {
+        "type": "integer",
+        "default": 0,
+        "min": 0
+      }
+    }
+  } 
