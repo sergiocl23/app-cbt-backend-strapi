@@ -1,0 +1,63 @@
+{
+  "collectionName": "components_newsletter_email_queue",
+  "info": {
+    "displayName": "Email Queue",
+    "description": "Cola principal de envío de emails",
+    "example": {
+      "description": "Este componente gestiona la cola de envío de correos",
+      "usage": {
+        "status": "processing",
+        "startTime": "2024-02-19T10:00:00Z",
+        "completedJobs": 45,
+        "failedJobs": 2,
+        "jobs": [
+          {
+            "batchNumber": 1,
+            "status": "completed",
+            "subscribers": ["user1@email.com", "user2@email.com"]
+          },
+          {
+            "batchNumber": 2,
+            "status": "pending",
+            "subscribers": ["user3@email.com", "user4@email.com"]
+          }
+        ]
+      },
+      "explanation": {
+        "status": "Estado actual de la cola",
+        "startTime": "Inicio del procesamiento",
+        "completedJobs": "Trabajos completados",
+        "failedJobs": "Trabajos fallidos",
+        "jobs": "Lista de lotes de envío"
+      }
+    }
+  },
+  "options": {},
+  "attributes": {
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "completed", "failed"],
+      "default": "pending"
+    },
+    "startTime": {
+      "type": "datetime",
+      "required": true
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "completedJobs": {
+      "type": "integer",
+      "default": 0
+    },
+    "failedJobs": {
+      "type": "integer",
+      "default": 0
+    },
+    "jobs": {
+      "type": "component",
+      "component": "newsletter.queue-job",
+      "repeatable": true
+    }
+  }
+} 

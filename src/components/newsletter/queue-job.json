@@ -1,0 +1,62 @@
+{
+  "collectionName": "components_newsletter_queue_jobs",
+  "info": {
+    "displayName": "Queue Job",
+    "description": "Trabajos individuales de la cola de envío",
+    "example": {
+      "description": "Este componente representa un lote de envíos en la cola",
+      "usage": {
+        "batchNumber": 1,
+        "status": "processing",
+        "retries": 1,
+        "nextRetry": "2024-02-19T10:05:00Z",
+        "error": "SMTP connection timeout",
+        "subscribers": [
+          {
+            "id": 1,
+            "email": "user1@email.com",
+            "status": "sent"
+          },
+          {
+            "id": 2,
+            "email": "user2@email.com",
+            "status": "pending"
+          }
+        ]
+      },
+      "explanation": {
+        "batchNumber": "Número de lote",
+        "status": "Estado del trabajo",
+        "retries": "Intentos realizados",
+        "nextRetry": "Próximo intento programado",
+        "error": "Último error encontrado",
+        "subscribers": "Lista de suscriptores en este lote"
+      }
+    }
+  },
+  "options": {},
+  "attributes": {
+    "batchNumber": {
+      "type": "integer",
+      "required": true
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "completed", "failed"],
+      "default": "pending"
+    },
+    "retries": {
+      "type": "integer",
+      "default": 0
+    },
+    "nextRetry": {
+      "type": "datetime"
+    },
+    "error": {
+      "type": "text"
+    },
+    "subscribers": {
+      "type": "json"
+    }
+  }
+} 

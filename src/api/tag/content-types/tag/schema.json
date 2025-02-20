@@ -4,19 +4,19 @@
   "info": {
     "singularName": "tag",
     "pluralName": "tags",
-    "displayName": "tags",
-    "description": ""
+    "displayName": "Tag"
   },
   "options": {
-    "draftAndPublish": false
+    "draftAndPublish": true
   },
-  "pluginOptions": {},
   "attributes": {
-    "name": {
-      "type": "string"
+    "nombre": {
+      "type": "string",
+      "required": true,
+      "unique": true
     },
-    "id_tag": {
-      "type": "uid"
+    "slug": {
+      "type": "string"
     },
     "noticias": {
       "type": "relation",
