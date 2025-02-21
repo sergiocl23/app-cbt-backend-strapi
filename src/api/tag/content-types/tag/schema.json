@@ -15,9 +15,6 @@
     "name": {
       "type": "string"
     },
-    "id_tag": {
-      "type": "uid"
-    },
     "noticias": {
       "type": "relation",
       "relation": "manyToMany",

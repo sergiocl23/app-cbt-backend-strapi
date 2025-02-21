@@ -1,0 +1,58 @@
+{
+  "kind": "collectionType",
+  "collectionName": "topics",
+  "info": {
+    "singularName": "topic",
+    "pluralName": "topics",
+    "displayName": "Topic",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "body": {
+      "type": "text"
+    },
+    "subcategory": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::subcategory.subcategory",
+      "inversedBy": "topics"
+    },
+    "closed": {
+      "type": "boolean",
+      "default": false
+    },
+    "users_permissions_user": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "plugin::users-permissions.user",
+      "inversedBy": "topics"
+    },
+    "posts": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::post.post",
+      "mappedBy": "topic"
+    },
+    "name": {
+      "type": "string",
+      "required": true,
+      "unique": true,
+      "maxLength": 30,
+      "minLength": 4
+    },
+    "forum_tags": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::forum-tag.forum-tag",
+      "mappedBy": "topics"
+    },
+    "pinned": {
+      "type": "boolean",
+      "default": false
+    }
+  }
+}
