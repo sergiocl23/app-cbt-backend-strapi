@@ -1,0 +1,25 @@
+{
+  "kind": "collectionType",
+  "collectionName": "forum_tags",
+  "info": {
+    "singularName": "forum-tag",
+    "pluralName": "forum-tags",
+    "displayName": "Forum_tag",
+    "description": ""
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "pluginOptions": {},
+  "attributes": {
+    "topics": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::topic.topic",
+      "inversedBy": "forum_tags"
+    },
+    "name": {
+      "type": "string"
+    }
+  }
+}
