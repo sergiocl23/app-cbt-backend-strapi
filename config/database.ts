@@ -4,9 +4,9 @@ export default ({ env }) => ({
     connection: {
       host: env('DATABASE_HOST', 'localhost'),
       port: env.int('DATABASE_PORT', 3306),
-      database: env('DATABASE_NAME', 'db_cbt_strapi'),
-      user: env('DATABASE_USERNAME', 'maxi'),
-      password: env('DATABASE_PASSWORD', 'root'),
+      database: env('DATABASE_NAME', 'strapi'),
+      user: env('DATABASE_USERNAME', 'strapi'),
+      password: env('DATABASE_PASSWORD', 'strapi'),
       ssl: env.bool('DATABASE_SSL', false),
       charset: 'utf8mb4',
     },
