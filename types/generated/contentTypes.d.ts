@@ -930,59 +930,19 @@ export interface ApiSubcategorySubcategory extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
-  collectionName: 'subscribers';
-  info: {
-    singularName: 'subscriber';
-    pluralName: 'subscribers';
-    displayName: 'Suscriptor';
-    description: 'Suscriptores del newsletter';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    email: Schema.Attribute.Email &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    name: Schema.Attribute.String;
-    pais: Schema.Attribute.Enumeration<
-      ['chile', 'paraguay', 'brasil', 'argentina', 'otro']
-    >;
-    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
-    lastNewsletterSent: Schema.Attribute.DateTime;
-    frequency: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
-      Schema.Attribute.DefaultTo<'weekly'>;
-    createdAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    publishedAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::subscriber.subscriber'
-    >;
-  };
-}
-
 export interface ApiTagTag extends Struct.CollectionTypeSchema {
   collectionName: 'tags';
   info: {
     singularName: 'tag';
     pluralName: 'tags';
-    displayName: 'Tag';
+    displayName: 'tags';
+    description: '';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
-    nombre: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    slug: Schema.Attribute.String;
+    name: Schema.Attribute.String;
     noticias: Schema.Attribute.Relation<'manyToMany', 'api::noticia.noticia'>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -1458,7 +1418,6 @@ declare module '@strapi/strapi' {
       'api::service.service': ApiServiceService;
       'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::subcategory.subcategory': ApiSubcategorySubcategory;
-      'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::tag.tag': ApiTagTag;
       'api::topic.topic': ApiTopicTopic;
       'admin::permission': AdminPermission;
