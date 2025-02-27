@@ -750,6 +750,7 @@ export interface ApiPostPost extends Struct.CollectionTypeSchema {
     body: Schema.Attribute.Text;
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
     post: Schema.Attribute.Relation<'manyToOne', 'api::post.post'>;
+    images: Schema.Attribute.Media<'files' | 'images', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -822,19 +823,59 @@ export interface ApiSubcategorySubcategory extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiTagTag extends Struct.CollectionTypeSchema {
-  collectionName: 'tags';
+export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
+  collectionName: 'subscribers';
   info: {
-    singularName: 'tag';
-    pluralName: 'tags';
-    displayName: 'tags';
-    description: '';
+    singularName: 'subscriber';
+    pluralName: 'subscribers';
+    displayName: 'Suscriptor';
+    description: 'Suscriptores del newsletter';
   };
   options: {
     draftAndPublish: false;
   };
   attributes: {
+    email: Schema.Attribute.Email &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
     name: Schema.Attribute.String;
+    pais: Schema.Attribute.Enumeration<
+      ['chile', 'paraguay', 'brasil', 'argentina', 'otro']
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    lastNewsletterSent: Schema.Attribute.DateTime;
+    frequency: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+      Schema.Attribute.DefaultTo<'weekly'>;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subscriber.subscriber'
+    >;
+  };
+}
+
+export interface ApiTagTag extends Struct.CollectionTypeSchema {
+  collectionName: 'tags';
+  info: {
+    singularName: 'tag';
+    pluralName: 'tags';
+    displayName: 'Tag';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    nombre: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    slug: Schema.Attribute.String;
     noticias: Schema.Attribute.Relation<'manyToMany', 'api::noticia.noticia'>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -1280,6 +1321,7 @@ declare module '@strapi/strapi' {
       'api::post.post': ApiPostPost;
       'api::service.service': ApiServiceService;
       'api::subcategory.subcategory': ApiSubcategorySubcategory;
+      'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::tag.tag': ApiTagTag;
       'api::topic.topic': ApiTopicTopic;
       'admin::permission': AdminPermission;
