@@ -993,6 +993,7 @@ export interface ApiTopicTopic extends Struct.CollectionTypeSchema {
       'api::forum-tag.forum-tag'
     >;
     pinned: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    images: Schema.Attribute.Media<'images' | 'files', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
