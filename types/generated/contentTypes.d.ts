@@ -623,31 +623,100 @@ export interface ApiInterestInterest extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiNoticiaNoticia extends Struct.CollectionTypeSchema {
-  collectionName: 'noticias';
+export interface ApiNewsletterNewsletter extends Struct.CollectionTypeSchema {
+  collectionName: 'newsletters';
   info: {
-    singularName: 'noticia';
-    pluralName: 'noticias';
-    displayName: 'noticias';
-    description: '';
+    singularName: 'newsletter';
+    pluralName: 'newsletters';
+    displayName: 'Newsletter';
+    description: 'Historial de newsletters enviados';
   };
   options: {
     draftAndPublish: true;
   };
   attributes: {
-    title: Schema.Attribute.String;
-    content: Schema.Attribute.Blocks;
-    imagen: Schema.Attribute.Media<'images' | 'files' | 'videos' | 'audios'>;
-    fecha: Schema.Attribute.Date;
-    autor: Schema.Attribute.Relation<
-      'oneToOne',
-      'plugin::users-permissions.user'
-    >;
-    summary: Schema.Attribute.String;
-    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
+    subject: Schema.Attribute.String & Schema.Attribute.Required;
+    content: Schema.Attribute.RichText & Schema.Attribute.Required;
+    type: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+      Schema.Attribute.DefaultTo<'weekly'>;
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'processing', 'completed', 'failed', 'cancelled']
+    > &
+      Schema.Attribute.DefaultTo<'pending'>;
+    progress: Schema.Attribute.Component<'newsletter.progress', false>;
+    sentDate: Schema.Attribute.DateTime;
+    completedDate: Schema.Attribute.DateTime;
+    noticias: Schema.Attribute.Relation<'oneToMany', 'api::noticia.noticia'>;
+    metrics: Schema.Attribute.Component<'newsletter.metrics', false>;
+    queue: Schema.Attribute.Component<'newsletter.email-queue', false> &
+      Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::newsletter.newsletter'
+    >;
+  };
+}
+
+export interface ApiNoticiaNoticia extends Struct.CollectionTypeSchema {
+  collectionName: 'noticias';
+  info: {
+    singularName: 'noticia';
+    pluralName: 'noticias';
+    displayName: 'Noticia';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    title: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    slug: Schema.Attribute.UID<'title'>;
+    content: Schema.Attribute.Text &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 1000000;
+      }>;
+    summary: Schema.Attribute.Text &
+      Schema.Attribute.Required &
+      Schema.Attribute.SetMinMaxLength<{
+        maxLength: 500;
+      }>;
+    mainImage: Schema.Attribute.String;
+    author: Schema.Attribute.Relation<
+      'manyToOne',
+      'plugin::users-permissions.user'
+    >;
+    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'> &
+      Schema.Attribute.Configurable;
+    pais: Schema.Attribute.Enumeration<
+      ['chile', 'paraguay', 'brasil', 'argentina', 'mundo']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.Configurable &
+      Schema.Attribute.DefaultTo<'chile'>;
+    sourceUrl: Schema.Attribute.Text &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    sourceName: Schema.Attribute.String & Schema.Attribute.Required;
+    scrapedContent: Schema.Attribute.Text & Schema.Attribute.Private;
+    articleType: Schema.Attribute.Enumeration<
+      ['regular', 'topicFeatured', 'topicSmall']
+    > &
+      Schema.Attribute.Required &
+      Schema.Attribute.DefaultTo<'regular'>;
+    publishedAt: Schema.Attribute.DateTime;
+    articleDate: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
       Schema.Attribute.Private;
     updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -675,8 +744,8 @@ export interface ApiPointPoint extends Struct.CollectionTypeSchema {
     id_point: Schema.Attribute.UID;
     name: Schema.Attribute.String;
     description: Schema.Attribute.Text;
-    latitude: Schema.Attribute.Float;
-    longitude: Schema.Attribute.Float;
+    latitude: Schema.Attribute.Decimal;
+    longitude: Schema.Attribute.Decimal;
     id_category: Schema.Attribute.Relation<
       'oneToMany',
       'api::points-category.points-category'
@@ -793,6 +862,44 @@ export interface ApiServiceService extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
+  collectionName: 'subscribers';
+  info: {
+    singularName: 'subscriber';
+    pluralName: 'subscribers';
+    displayName: 'Suscriptor';
+    description: 'Suscriptores del newsletter';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    email: Schema.Attribute.Email &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    name: Schema.Attribute.String;
+    pais: Schema.Attribute.Enumeration<
+      ['chile', 'paraguay', 'brasil', 'argentina', 'otro']
+    >;
+    isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
+    lastNewsletterSent: Schema.Attribute.DateTime;
+    frequency: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+      Schema.Attribute.DefaultTo<'weekly'>;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subscriber.subscriber'
+    >;
+  };
+}
+
 export interface ApiSubcategorySubcategory extends Struct.CollectionTypeSchema {
   collectionName: 'subcategories';
   info: {
@@ -858,6 +965,34 @@ export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::subscriber.subscriber'
     >;
+  };
+}
+
+export interface ApiTagTag extends Struct.CollectionTypeSchema {
+  collectionName: 'tags';
+  info: {
+    singularName: 'tag';
+    pluralName: 'tags';
+    displayName: 'Tag';
+  };
+  options: {
+    draftAndPublish: true;
+  };
+  attributes: {
+    nombre: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    slug: Schema.Attribute.String;
+    noticias: Schema.Attribute.Relation<'manyToMany', 'api::noticia.noticia'>;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::tag.tag'>;
   };
 }
 
@@ -1315,11 +1450,13 @@ declare module '@strapi/strapi' {
       'api::company.company': ApiCompanyCompany;
       'api::forum-tag.forum-tag': ApiForumTagForumTag;
       'api::interest.interest': ApiInterestInterest;
+      'api::newsletter.newsletter': ApiNewsletterNewsletter;
       'api::noticia.noticia': ApiNoticiaNoticia;
       'api::point.point': ApiPointPoint;
       'api::points-category.points-category': ApiPointsCategoryPointsCategory;
       'api::post.post': ApiPostPost;
       'api::service.service': ApiServiceService;
+      'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::subcategory.subcategory': ApiSubcategorySubcategory;
       'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::tag.tag': ApiTagTag;

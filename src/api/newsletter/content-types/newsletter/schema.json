@@ -1,0 +1,59 @@
+{
+  "kind": "collectionType",
+  "collectionName": "newsletters",
+  "info": {
+    "singularName": "newsletter",
+    "pluralName": "newsletters",
+    "displayName": "Newsletter",
+    "description": "Historial de newsletters enviados"
+  },
+  "options": {
+    "draftAndPublish": true
+  },
+  "attributes": {
+    "subject": {
+      "type": "string",
+      "required": true
+    },
+    "content": {
+      "type": "richtext",
+      "required": true
+    },
+    "type": {
+      "type": "enumeration",
+      "enum": ["daily", "weekly", "monthly"],
+      "default": "weekly"
+    },
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "completed", "failed", "cancelled"],
+      "default": "pending"
+    },
+    "progress": {
+      "type": "component",
+      "component": "newsletter.progress",
+      "required": false
+    },
+    "sentDate": {
+      "type": "datetime"
+    },
+    "completedDate": {
+      "type": "datetime"
+    },
+    "noticias": {
+      "type": "relation",
+      "relation": "oneToMany",
+      "target": "api::noticia.noticia"
+    },
+    "metrics": {
+      "type": "component",
+      "component": "newsletter.metrics"
+    },
+    "queue": {
+      "type": "component",
+      "repeatable": false,
+      "component": "newsletter.email-queue",
+      "required": true
+    }
+  }
+}
