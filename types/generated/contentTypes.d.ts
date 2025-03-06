@@ -671,50 +671,68 @@ export interface ApiNoticiaNoticia extends Struct.CollectionTypeSchema {
     singularName: 'noticia';
     pluralName: 'noticias';
     displayName: 'Noticia';
+    description: '';
   };
   options: {
     draftAndPublish: true;
   };
   attributes: {
-    title: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
+    title: Schema.Attribute.String;
     slug: Schema.Attribute.UID<'title'>;
     content: Schema.Attribute.Text &
-      Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
         maxLength: 1000000;
       }>;
     summary: Schema.Attribute.Text &
-      Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
         maxLength: 500;
       }>;
     mainImage: Schema.Attribute.String;
+    featuredImage: Schema.Attribute.Media<
+      | 'images'
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/svg+xml'
+      | 'image/tiff'
+      | 'image/x-icon'
+    >;
+    additionalImages: Schema.Attribute.Media<
+      | 'images'
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/svg+xml'
+      | 'image/tiff'
+      | 'image/x-icon',
+      true
+    > &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 5;
+        },
+        number
+      >;
     author: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
     >;
-    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'> &
-      Schema.Attribute.Configurable;
+    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
     pais: Schema.Attribute.Enumeration<
       ['chile', 'paraguay', 'brasil', 'argentina', 'mundo']
     > &
-      Schema.Attribute.Required &
       Schema.Attribute.Configurable &
       Schema.Attribute.DefaultTo<'chile'>;
-    sourceUrl: Schema.Attribute.Text &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    sourceName: Schema.Attribute.String & Schema.Attribute.Required;
-    scrapedContent: Schema.Attribute.Text & Schema.Attribute.Private;
+    sourceUrl: Schema.Attribute.Text;
+    sourceName: Schema.Attribute.String;
     articleType: Schema.Attribute.Enumeration<
       ['regular', 'topicFeatured', 'topicSmall']
     > &
-      Schema.Attribute.Required &
       Schema.Attribute.DefaultTo<'regular'>;
     publishedAt: Schema.Attribute.DateTime;
-    articleDate: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    articleDate: Schema.Attribute.DateTime;
+    manualCreation: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -861,6 +879,36 @@ export interface ApiServiceService extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiSubcategorySubcategory extends Struct.CollectionTypeSchema {
+  collectionName: 'subcategories';
+  info: {
+    singularName: 'subcategory';
+    pluralName: 'subcategories';
+    displayName: 'Subcategory';
+    description: '';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Schema.Attribute.String;
+    category: Schema.Attribute.Relation<'manyToOne', 'api::category.category'>;
+    topics: Schema.Attribute.Relation<'oneToMany', 'api::topic.topic'>;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::subcategory.subcategory'
+    >;
+  };
+}
+
 export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
   collectionName: 'subscribers';
   info: {
@@ -899,73 +947,16 @@ export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiSubcategorySubcategory extends Struct.CollectionTypeSchema {
-  collectionName: 'subcategories';
+export interface ApiTagTag extends Struct.CollectionTypeSchema {
+  collectionName: 'tags';
   info: {
-    singularName: 'subcategory';
-    pluralName: 'subcategories';
-    displayName: 'Subcategory';
+    singularName: 'tag';
+    pluralName: 'tags';
+    displayName: 'Tag';
     description: '';
   };
   options: {
     draftAndPublish: false;
-  };
-  attributes: {
-    name: Schema.Attribute.String;
-    category: Schema.Attribute.Relation<'manyToOne', 'api::category.category'>;
-    topics: Schema.Attribute.Relation<'oneToMany', 'api::topic.topic'>;
-    createdAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    publishedAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String;
-    localizations: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::subcategory.subcategory'
-    >;
-  };
-}
-
-export interface ApiTagTag extends Struct.CollectionTypeSchema {
-  collectionName: 'tags';
-  info: {
-    singularName: 'tag';
-    pluralName: 'tags';
-    displayName: 'Tag';
-  };
-  options: {
-    draftAndPublish: true;
-  };
-  attributes: {
-    nombre: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    slug: Schema.Attribute.String;
-    noticias: Schema.Attribute.Relation<'manyToMany', 'api::noticia.noticia'>;
-    createdAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    publishedAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String;
-    localizations: Schema.Attribute.Relation<'oneToMany', 'api::tag.tag'>;
-  };
-}
-
-export interface ApiTagTag extends Struct.CollectionTypeSchema {
-  collectionName: 'tags';
-  info: {
-    singularName: 'tag';
-    pluralName: 'tags';
-    displayName: 'Tag';
-  };
-  options: {
-    draftAndPublish: true;
   };
   attributes: {
     nombre: Schema.Attribute.String &
@@ -1417,8 +1408,8 @@ declare module '@strapi/strapi' {
       'api::points-category.points-category': ApiPointsCategoryPointsCategory;
       'api::post.post': ApiPostPost;
       'api::service.service': ApiServiceService;
-      'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::subcategory.subcategory': ApiSubcategorySubcategory;
+      'api::subscriber.subscriber': ApiSubscriberSubscriber;
       'api::tag.tag': ApiTagTag;
       'api::topic.topic': ApiTopicTopic;
       'admin::permission': AdminPermission;

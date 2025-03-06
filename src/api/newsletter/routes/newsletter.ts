@@ -7,8 +7,7 @@ module.exports = {
       path: '/newsletters/test-send',
       handler: 'api::newsletter.newsletter.testSend',
       config: {
-        policies: [],
-        middlewares: []
+        auth: false,
       }
     },
     {

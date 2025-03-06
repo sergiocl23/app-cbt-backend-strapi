@@ -4,7 +4,8 @@
   "info": {
     "singularName": "noticia",
     "pluralName": "noticias",
-    "displayName": "Noticia"
+    "displayName": "Noticia",
+    "description": ""
   },
   "options": {
     "draftAndPublish": true
@@ -13,8 +14,7 @@
   "attributes": {
     "title": {
       "type": "string",
-      "unique": true,
-      "required": true
+      "unique": false
     },
     "slug": {
       "type": "uid",
@@ -23,17 +23,44 @@
     },
     "content": {
       "type": "text",
-      "required": true,
       "maxLength": 1000000
     },
     "summary": {
       "type": "text",
-      "required": true,
       "maxLength": 500
     },
     "mainImage": {
       "type": "string",
       "required": false
+    },
+    "featuredImage": {
+      "type": "media",
+      "multiple": false,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/svg+xml",
+        "image/tiff",
+        "image/x-icon"
+      ]
+    },
+    "additionalImages": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/svg+xml",
+        "image/tiff",
+        "image/x-icon"
+      ],
+      "max": 5
     },
     "author": {
       "type": "relation",
@@ -45,8 +72,7 @@
       "type": "relation",
       "relation": "manyToMany",
       "target": "api::tag.tag",
-      "inversedBy": "noticias",
-      "configurable": true
+      "inversedBy": "noticias"
     },
     "pais": {
       "type": "enumeration",
@@ -57,22 +83,14 @@
         "argentina",
         "mundo"
       ],
-      "required": true,
       "default": "chile",
       "configurable": true
     },
     "sourceUrl": {
-      "type": "text",
-      "unique": true,
-      "required": true
+      "type": "text"
     },
     "sourceName": {
-      "type": "string",
-      "required": true
-    },
-    "scrapedContent": {
-      "type": "text",
-      "private": true
+      "type": "string"
     },
     "articleType": {
       "type": "enumeration",
@@ -81,15 +99,17 @@
         "topicFeatured",
         "topicSmall"
       ],
-      "default": "regular",
-      "required": true
+      "default": "regular"
     },
     "publishedAt": {
       "type": "datetime"
     },
     "articleDate": {
-      "type": "datetime",
-      "required": true
+      "type": "datetime"
+    },
+    "manualCreation": {
+      "type": "boolean",
+      "default": false
     }
   }
 }

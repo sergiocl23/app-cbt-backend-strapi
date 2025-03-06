@@ -1,3 +1,5 @@
+import { env } from '@strapi/utils';
+
 export default () => ({
   'strapi-plugin-populate-deep': {
     config: {
@@ -8,18 +10,25 @@ export default () => ({
     config: {
       provider: 'nodemailer',
       providerOptions: {
-        host: 'smtp.gmail.com',
-        port: 465,
+        host: env('SMTP_HOST', 'smtp.gmail.com'),
+        port: env.int('SMTP_PORT', 465),
         secure: true,
         auth: {
-          user: 'maxiloxito12@gmail.com',
-          pass: 'fcoz kupe lhui qepc',
+          user: env('SMTP_USER'),
+          pass: env('SMTP_PASSWORD'),
         },
       },
       settings: {
-        defaultFrom: 'maxiloxito12@gmail.com',
-        defaultReplyTo: 'maxiloxito12@gmail.com',
+        defaultFrom: env('SMTP_FROM', 'newsletter@corredorbioceanico.com'),
+        defaultReplyTo: env('SMTP_REPLY_TO', 'soporte@corredorbioceanico.com'),
       },
+    },
+  },
+  upload: {
+    config: {
+      provider: 'local',
+      providerOptions: {},
+      sizeLimit: 20 * 1024 * 1024, // 20 MB en bytes
     },
   },
 });

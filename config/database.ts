@@ -1,6 +1,6 @@
 export default ({ env }) => ({
   connection: {
-    client: 'mysql',
+    client: env('DATABASE_CLIENT', 'mysql'),
     connection: {
       host: env('DATABASE_HOST', 'localhost'),
       port: env.int('DATABASE_PORT', 3306),
