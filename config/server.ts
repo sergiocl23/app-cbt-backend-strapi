@@ -21,5 +21,11 @@ export default ({ env }) => ({
     hourlyLimit: env.int('NEWSLETTER_HOURLY_LIMIT', 150),
     batchSize: env.int('NEWSLETTER_BATCH_SIZE', 50),
     delayBetweenBatches: env.int('NEWSLETTER_DELAY_BETWEEN_BATCHES', 3000)
+  },
+  // Ajuste para mejorar la estabilidad del servidor
+  http: {
+    serverOptions: {
+      keepAliveTimeout: 60000, // milliseconds
+    }
   }
 });

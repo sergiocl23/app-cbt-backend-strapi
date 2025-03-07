@@ -16,6 +16,7 @@ interface SiteSelector {
   priority?: (url: string) => number;
   dateParser?: (dateText: string) => Date | string | null;
   dateFormats?: string[];
+  exclude?: string[];
 }
 
 interface SiteSelectors {
@@ -1051,7 +1052,7 @@ const siteSelectors: SiteSelectors = {
       const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
       if (match) {
         const [_, dia, mes, año] = match;
-        return `${dia} de ${mes} de ${año}`;
+        return new Date(`${año}-${mes}-${dia}T00:00:00.000Z`);
       }
       return null;
     },
@@ -1359,6 +1360,358 @@ const siteSelectors: SiteSelectors = {
       return null;
     },
     priority: (url) => url.includes('/revista/') ? 2 : 1
+  },
+
+  // Voz de América
+  'vozdeamerica.com': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?vozdeamerica\.com\/a\/[\w-]+\/\d+\.html$/
+    ],
+    title: ['h1.title.pg-title'],
+    date: [
+      'time[datetime]',
+      'span.date'
+    ],
+    content: [
+      'div.wsw > p:not(:has(+ div.wsw__embed))',
+      'div.wsw > h3.wsw__h3',
+      'div.wsw > p:not(:last-child)'
+    ],
+    image: [
+      'div.img-wrap img:not(.wsw__embed img)',
+      'meta[property="og:image"]'
+    ],
+    exclude: [
+      '.wsw__embed',
+      'div[data-owner-ct="Article"]',
+      'p:has(a[href*="facebook.com"]):last-child'
+    ],
+    country: 'mundo',
+    priority: (url: string) => 1
+  },
+  
+  // Defrentesalta Argentina
+  'defrentesalta.com.ar': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?defrentesalta\.com\.ar\/contenido\/\d+\/[\w-]+$/
+    ],
+    title: [
+      'h1.fullpost__titulo',
+      '.fullpost__titulo'
+    ],
+    content: [
+      '.fullpost__cuerpo p:not([id^="publi-"]):not(:has(.publi))',
+      '.fullpost__cuerpo > p:not(:has(img.publi-imagen))'
+    ],
+    date: [
+      '.fullpost__fecha .fecha',
+      'span.fullpost__fecha span.fecha'
+    ],
+    image: [
+      'div.fullpost__imagen img.img-responsive',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        // Convertir directamente a formato ISO
+        return new Date(`${año}-${mes}-${dia}T00:00:00.000Z`);
+      }
+      return null;
+    },
+    country: 'argentina'
+  },
+
+  // El Mostrador Chile
+  'elmostrador.cl': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?elmostrador\.cl\/[\w-]+\/\d{4}\/\d{2}\/\d{2}\/[\w-]+\/?$/,
+      /^https?:\/\/(?:www\.)?elmostrador\.cl\/aqui-[\w-]+\/\d{4}\/\d{2}\/\d{2}\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.d-the-single__title',
+      '.js_the_single_title',
+      'article h1.headline'
+    ],
+    content: [
+      // Extraer el contenido principal evitando secciones de publicidad y formularios
+      '.d-the-single-wrapper__text > p:not(:has(script)):not(:has(.responsive-container))',
+      '.d-the-single-wrapper__text > ul',
+      '.d-the-single-wrapper__text h2:not(:contains("Destacados"))',
+      // Solo incluye el primer artículo (antes del primer separador u-numbered-separator)
+      '.d-the-single-wrapper__text > p:not(:has(.u-numbered-separator ~ p))'
+    ],
+    date: [
+      'time.d-the-single__date',
+      '.article-date time',
+      'time[datetime]'
+    ],
+    image: [
+      // Imágenes dentro del artículo
+      '.d-the-single-wrapper__text img[src*="media-front.elmostrador.cl"]',
+      '.wp-caption img',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "4 marzo, 2025"
+      const match = dateText.match(/(\d{1,2})\s+([a-zé]+),\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        return `${dia} de ${mes} de ${año}`;
+      }
+      return null;
+    },
+    country: 'chile',
+    priority: (url: string) => url.includes('/aqui-arica/') ? 2 : 1
+  },
+
+  // Macrofinanzas Paraguay
+  'macrofinanzas.com.py': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?macrofinanzas\.com\.py\/[\w-]+\/?$/,
+      /^https?:\/\/(?:www\.)?macrofinanzas\.com\.py\/(?:\d{4})\/(?:\d{2})\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.entry-title',
+      '.entry-title'
+    ],
+    content: [
+      '.td-post-content h1:not(.entry-title)',
+      '.td-post-content > h1',
+      '.td-post-content > p'
+    ],
+    date: [
+      'span.td-post-date time',
+      'time.entry-date'
+    ],
+    image: [
+      '.td-post-featured-image img.entry-thumb',
+      '.td-post-featured-image a img',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "4 marzo, 2025"
+      const match = dateText.match(/(\d{1,2})\s+([a-zé]+),\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        return `${dia} de ${mes} de ${año}`;
+      }
+      return null;
+    },
+    country: 'paraguay',
+    priority: (url: string) => url.includes('corredor-bioceanico') ? 2 : 1
+  },
+
+  // Jujuy al Momento Argentina
+  'jujuyalmomento.com': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?jujuyalmomento\.com\/[\w-]+\/[\w-]+-n\d+$/
+    ],
+    title: [
+      'h1.title',
+      '.article-header h1'
+    ],
+    content: [
+      '.cuerpo p:not(:has(script))',
+      'div[data-twitter-link] p',
+      '.article-content p'
+    ],
+    date: [
+      '.article-date time',
+      'div.article-date span time'
+    ],
+    image: [
+      'div.image.itemGallery img[src*="media.jujuyalmomento.com"]',
+      'div.gallery img[src*="/adjuntos/"]',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "27 de febrero de 2025 - 11:13"
+      const match = dateText.match(/(\d{1,2})\s+de\s+([a-zé]+)\s+de\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        return `${dia} de ${mes} de ${año}`;
+      }
+      return null;
+    },
+    country: 'argentina',
+    priority: (url: string) => url.includes('corredor-bioceanico') ? 2 : 1
+  },
+
+  // Ministerio de Relaciones Exteriores Paraguay
+  'mre.gov.py': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?mre\.gov\.py\/index\.php\/[\w-]+\/[\w-]+$/,
+      /^https?:\/\/(?:www\.)?mre\.gov\.py\/index\.php\/noticias-de-embajadas-y-consulados\/[\w-]+$/
+    ],
+    title: [
+      'h5.page-title',
+      '.page-title',
+      'h1.title'
+    ],
+    content: [
+      '.section.contenido_principal p:not([data-redactor-inserted-image])',
+      '.contenido_principal p:not(:has(img))',
+      'div[class*="contenido"] p'
+    ],
+    date: [
+      'blockquote.ccm-block-page-attribute-display-wrapper',
+      '.ccm-block-page-attribute-display-wrapper'
+    ],
+    image: [
+      'p[data-redactor-inserted-image="true"] img',
+      'img[id="image-marker"]',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "Publicado:  02/25/25 04:23:p. m."
+      const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{2})\s+(\d{2}):(\d{2})/);
+      if (match) {
+        const [_, mes, dia, año, hora, minuto] = match;
+        // Convertir directamente a formato ISO (notando que el formato es MM/DD/YY americano)
+        return new Date(`20${año}-${mes}-${dia}T${hora}:${minuto}:00.000Z`);
+      }
+      return null;
+    },
+    country: 'paraguay',
+    priority: (url: string) => url.includes('corredor-bioceanico') ? 2 : 1
+  },
+
+  // Portal Oficial del Corredor Bioceánico
+  'corredorbioceanico.org': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?corredorbioceanico\.org\/[\w-]+\/?$/,
+      /^https?:\/\/(?:www\.)?corredorbioceanico\.org\/[\w-]+\/[\w-]+\/?$/
+    ],
+    title: [
+      'h2',
+      '.container-text-page h2'
+    ],
+    content: [
+      '.container-text-page p:not(.fecha-noticia):not(.fuente)',
+      '.col-lg-8 p:not(.fecha-noticia):not(.fuente)',
+      'div[class*="container-text"] p:not(.fuente)'
+    ],
+    date: [
+      'p.fecha-noticia',
+      '.fecha-noticia'
+    ],
+    image: [
+      '.container-text-page img[src*="wp-content"]',
+      '.container-text-page img',
+      'meta[property="og:image"]'
+    ],
+    exclude: [
+      'p.fuente',
+      '.fuente'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "12 de febrero de 2025"
+      const meses = {
+        'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+        'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+        'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+      };
+      
+      const match = dateText.match(/(\d{1,2})\s+de\s+([a-zé]+)\s+de\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mesTexto, año] = match;
+        const mes = meses[mesTexto.toLowerCase()];
+        if (mes) {
+          // Formato ISO directo
+          return new Date(`${año}-${mes}-${dia.padStart(2, '0')}T00:00:00.000Z`);
+        }
+      }
+      return null;
+    },
+    country: 'brasil',
+    priority: (url: string) => 3 // Alta prioridad por ser fuente oficial
+  },
+
+  // Ferrere - Firma legal con noticias sobre el Corredor/Gasoducto Bioceánico
+  'ferrere.com': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?ferrere\.com\/(?:en\/)?news\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.h3',
+      '.article-title h1',
+      'header h1'
+    ],
+    content: [
+      '.main-content',
+      '.main-content p',
+      '.main-content ul',
+      '.article-content'
+    ],
+    date: [
+      '.module.article-date .date',
+      '.article-date-wrap .date',
+      '.article-date li.date'
+    ],
+    image: [
+      '.article-image img',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "24/02/2025"
+      const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        // Convertir directamente a formato ISO
+        return new Date(`${año}-${mes}-${dia}T00:00:00.000Z`);
+      }
+      return null;
+    },
+    country: 'paraguay',
+    priority: (url: string) => url.includes('bioceanico') ? 2 : 1
+  },
+
+  // El Nacional Paraguay
+  'elnacional.com.py': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?elnacional\.com\.py\/[\w-]+\/\d{4}\/\d{2}\/\d{2}\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.mvp-post-title',
+      '.entry-title',
+      'article h1'
+    ],
+    content: [
+      '#mvp-content-main p:not([style*="display: none"])',
+      '#mvp-content-main p',
+      '.post-content p'
+    ],
+    date: [
+      '.mvp-author-info-date time.post-date',
+      'span.mvp-post-date time',
+      'time.post-date'
+    ],
+    image: [
+      '#mvp-post-feat-img img',
+      '.wp-post-image',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "22 de febrero de 2025 - 10:24"
+      const match = dateText.match(/(\d{1,2})\s+de\s+([a-zé]+)\s+de\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        const meses = {
+          'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+          'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+          'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+        };
+        const mesNum = meses[mes.toLowerCase()];
+        if (mesNum) {
+          return new Date(`${año}-${mesNum}-${dia.padStart(2, '0')}T00:00:00.000Z`);
+        }
+      }
+      return null;
+    },
+    country: 'paraguay',
+    priority: (url: string) => url.includes('bioceanico') ? 2 : 1
   },
 };
 

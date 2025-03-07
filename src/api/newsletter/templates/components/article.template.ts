@@ -114,11 +114,38 @@ export const renderArticle = (noticia: any) => {
     const getImageUrl = (noticia: any) => {
       if (!noticia) return 'cid:logo';
       
-      if (noticia.mainImage?.url) {
-        const url = noticia.mainImage.url;
-        return url.startsWith('data:') ? 'cid:logo' : url;
+      // 1. Si tiene una URL de imagen principal directa (típica de noticias scrapeadas)
+      if (noticia.mainImage) {
+        // Si es una URL absoluta completa, la usamos directamente
+        if (noticia.mainImage.startsWith('http://') || noticia.mainImage.startsWith('https://')) {
+          return noticia.mainImage;
+        } 
+        // Si parece un dominio sin protocolo, añadimos https://
+        else if (noticia.mainImage.includes('.') && !noticia.mainImage.startsWith('/')) {
+          return `https://${noticia.mainImage}`;
+        }
+        // Si es una ruta relativa, usamos PUBLIC_URL o localhost
+        else if (noticia.mainImage.startsWith('/')) {
+          const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+          return `${baseUrl}${noticia.mainImage}`;
+        }
       }
       
+      // 2. Si tiene imagen destacada (featuredImage) del media library de Strapi
+      if (noticia.featuredImage?.url) {
+        const url = noticia.featuredImage.url;
+        // Si es una URL completa, la usamos directamente
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+          return url;
+        }
+        // Si es una ruta relativa (/uploads/...)
+        else if (url.startsWith('/')) {
+          const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+          return `${baseUrl}${url}`;
+        }
+      }
+      
+      // Si no encontramos una imagen válida, usamos el logo
       return 'cid:logo';
     };
 
@@ -128,71 +155,58 @@ export const renderArticle = (noticia: any) => {
 
     // Procesar URL de imagen para asegurar que sea accesible externamente
     if (imageUrl) {
-      // 1. Si la URL ya es absoluta (http:// o https://), la dejamos como está
-      if (imageUrl.startsWith('http://') || imageUrl.startsWith('https://')) {
-        console.log(`URL absoluta, se usará directamente: ${imageUrl}`);
-      } 
-      // 2. Si es una URL relativa, le agregamos el prefijo de la URL pública
-      else if (imageUrl.startsWith('/')) {
-        // Para desarrollo, debemos usar una URL pública para las imágenes en el newsletter
-        // ya que los clientes de correo no pueden acceder a localhost
-        if (process.env.NODE_ENV === 'development') {
-          // Usar la imagen del logo del Corredor Bioceánico como respaldo
-          console.log(`Imagen local detectada en desarrollo, usando logo como respaldo`);
-          imageUrl = 'cid:logo'; // Referencia a la imagen del Corredor Bioceánico
-          // ⚠️ NOTA IMPORTANTE: En producción, esto usará el dominio real configurado en PUBLIC_URL
-        } else {
-          // En producción, usar la URL pública configurada
-          if (imageUrl.startsWith('/uploads/')) {
-            let baseUrl = process.env.PUBLIC_URL || 'https://corredorbioceanico.com';
-            if (baseUrl.endsWith('/')) {
-              baseUrl = baseUrl.slice(0, -1);
-            }
-            imageUrl = `${baseUrl}${imageUrl}`;
-            // ⚠️ IMPORTANTE: Asegúrate de que PUBLIC_URL esté configurado en .env con tu dominio real
-          }
-        }
-      }
-      // 3. Si es una URL de data:image, la filtramos
-      else if (imageUrl.startsWith('data:image') || imageUrl.length > 1000) {
-        console.log(`⚠️ URL de imagen no válida (data URI) para: "${title.substring(0, 20)}..."`);
-        
-        // Usar la imagen del logo del Corredor Bioceánico como respaldo
-        imageUrl = 'cid:logo'; // Referencia a la imagen del Corredor Bioceánico
-        console.log(`Usando imagen de respaldo (logo)`);
-      }
-      
       // Verificación final: intentar validar que la URL sea accesible
       try {
         const urlObj = new URL(imageUrl);
-        console.log(`URL final validada: ${imageUrl}`);
+        console.log(`URL de imagen validada: ${imageUrl}`);
       } catch (e) {
-        console.error(`La URL no es válida: ${imageUrl}`, e);
-        // Usar la imagen del logo del Corredor Bioceánico como respaldo
-        imageUrl = 'cid:logo'; // Referencia a la imagen del Corredor Bioceánico
+        console.error(`La URL de imagen no es válida: ${imageUrl}`, e);
+        // Usar la imagen del logo como respaldo
+        imageUrl = 'cid:logo';
       }
     } else {
       console.log('No se encontró imagen para este artículo, usando logo como respaldo');
-      // Usar la imagen del logo del Corredor Bioceánico como respaldo
-      imageUrl = 'cid:logo'; // Referencia a la imagen del Corredor Bioceánico
+      imageUrl = 'cid:logo';
     }
 
     // Construir URLs completas para enlaces a noticias
     let linkUrl = sourceUrl;
     
+    // Para noticias scrapeadas, validamos que la URL sea correcta
+    if (linkUrl) {
+      try {
+        // Verificar si es una URL válida
+        new URL(linkUrl);
+        console.log(`Noticia scrapeada: Usando URL original ${linkUrl}`);
+      } catch (e) {
+        // Si la URL no es válida, intentamos arreglarla
+        if (!linkUrl.startsWith('http://') && !linkUrl.startsWith('https://')) {
+          linkUrl = `https://${linkUrl}`;
+          console.log(`Noticia scrapeada: Corrigiendo URL a ${linkUrl}`);
+          
+          try {
+            // Verificamos de nuevo
+            new URL(linkUrl);
+          } catch (e) {
+            // Si sigue fallando, usamos una URL interna
+            console.error(`La URL no es válida incluso después de corrección: ${linkUrl}`);
+            
+            // Usar URL interna como respaldo
+            const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+            
+            linkUrl = `${baseUrl}/api/noticias/ver/${id}`;
+            console.log(`Usando URL interna como respaldo: ${linkUrl}`);
+          }
+        }
+      }
+    } 
     // Si no tiene URL externa (noticias manuales), generar enlace a la vista interna
-    if (!linkUrl) {
-      // En desarrollo usamos localhost, en producción el dominio real
-      const baseUrl = process.env.NODE_ENV === 'development' 
-        ? 'http://localhost:1337' 
-        : (process.env.PUBLIC_URL || 'https://corredorbioceanico.com');
-        
+    else {
+      // Usar el valor de PUBLIC_URL o localhost por defecto
+      const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+      
       linkUrl = `${baseUrl}/api/noticias/ver/${id}`;
       console.log(`Noticia manual: Generando enlace interno a ${linkUrl}`);
-      
-      // ⚠️ IMPORTANTE PARA PRODUCCIÓN:
-      // 1. Asegúrate de que PUBLIC_URL esté configurado en .env con tu dominio real
-      // 2. Verifica que la ruta /api/noticias/ver/:id tenga permisos públicos en Strapi
     }
 
     /**

@@ -241,46 +241,6 @@ const getViewTemplate = (availableTags: any[], tags: string[], pais: string, sta
 `;
 
 export default factories.createCoreController('api::noticia.noticia', ({ strapi }) => ({
-  async scrapeNews(ctx) {
-    try {
-      const { searchTerm } = ctx.request.body;
-      
-      logger.info('Iniciando scraping de noticias...');
-      const articles = await strapi
-        .service('api::noticia.noticia-scraper')
-        .scrapeNews(searchTerm);
-
-      ctx.body = {
-        status: 'success',
-        data: {
-          articles: articles.map((article: NoticiaType) => ({
-            id: article.id,
-            title: article.title,
-            content: article.content,
-            summary: article.summary,
-            mainImage: article.mainImage,
-            sourceUrl: article.sourceUrl,
-            sourceName: article.sourceName,
-            publishedAt: article.publishedAt,
-            articleDate: article.articleDate,
-            pais: article.pais,
-            tags: article.tags,
-            status: article.status || 'published'
-          })),
-          count: articles.length,
-          timestamp: new Date().toISOString()
-        },
-        message: 'Scraping completado exitosamente'
-      };
-    } catch (error) {
-      ctx.body = {
-        status: 'error',
-        error: error.message,
-        timestamp: new Date().toISOString()
-      };
-      ctx.status = 400;
-    }
-  },
   async find(ctx) {
     try {
       logger.info('\n=== INICIO DE BÚSQUEDA ===');
@@ -441,195 +401,6 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
         error: error.message
       };
       ctx.status = 400;
-    }
-  },
-
-  //BORRAR TAMBIEN EN MIDDLEWARES.TS
-  //VISTA DE LA BASE DE DATOS BORRAR DESPUES DE PROBAR
-  async viewNoticias(ctx) {
-    try {
-      const { tags, startDate, endDate, pais } = ctx.request.query;
-      
-      logger.info('\n=== INICIO DE BÚSQUEDA ===');
-      logger.info('Query params completos:', ctx.request.query);
-
-      // Procesamiento de fechas
-      let dateFilter: { articleDate?: { $gte?: Date; $lte?: Date } } = {};
-      if (startDate || endDate) {
-        logger.info('\n=== PROCESAMIENTO DE FECHAS ===');
-        logger.info('Zona horaria del servidor:', Intl.DateTimeFormat().resolvedOptions().timeZone);
-        logger.info('Hora actual del servidor:', new Date().toISOString());
-        
-        dateFilter = {
-          articleDate: {}
-        };
-        
-        if (startDate) {
-          const start = new Date(startDate as string);
-          start.setUTCHours(0, 0, 0, 0);
-          dateFilter.articleDate.$gte = start;
-          logger.info('Fecha inicio procesada:', start.toISOString());
-        }
-        
-        if (endDate) {
-          const end = new Date(endDate as string);
-          end.setUTCHours(23, 59, 59, 999);
-          dateFilter.articleDate.$lte = end;
-          logger.info('Fecha fin procesada:', end.toISOString());
-        }
-      }
-
-      // Obtener resultados usando el nuevo filtro de fechas
-      const noticias = await strapi.db.query('api::noticia.noticia').findMany({
-        where: {
-          $and: [
-            tags ? {
-              $and: Array.from(new Set(Array.isArray(tags) ? tags : [tags])).map(tag => ({
-                tags: {
-                  nombre: {
-                    $eq: tag
-                  }
-                }
-              }))
-            } : {},
-            pais ? {
-              pais: (pais as string)?.toLowerCase()
-            } : {},
-            dateFilter, // Usar el nuevo filtro de fechas
-            {
-              publishedAt: {
-                $notNull: true
-              }
-            }
-          ]
-        },
-        orderBy: { createdAt: 'desc' },
-        populate: {
-          tags: {
-            select: ['nombre']
-          }
-        },
-      });
-
-      logger.info('\n=== DETALLE DE FECHAS ENCONTRADAS ===');
-      noticias.forEach((noticia, index) => {
-        logger.info(`Noticia ${index + 1}:`, {
-          id: noticia.id,
-          titulo: noticia.title,
-          fecha: noticia.articleDate,
-          timestamp: new Date(noticia.articleDate).getTime()
-        });
-      });
-
-      // Formatear resultados para vista
-      const results = noticias.map((noticia: NoticiaEntity) => ({
-        ...noticia,
-        pais: noticia.pais ? String(noticia.pais) : 'País no especificado',
-        tags: noticia.tags || [],
-        fechaFormateada: noticia.articleDate 
-          ? new Date(noticia.articleDate).toLocaleDateString('es-CL', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric'
-            })
-          : 'Sin fecha'
-      }));
-      
-      // Obtener tags disponibles
-      const availableTags = await strapi.db.connection('tags')
-        .select('*')
-        .whereNotNull('published_at');
-
-      // Renderizar vista
-      const html = getViewTemplate(
-        availableTags,
-        Array.isArray(tags) ? tags : [tags].filter(Boolean),
-        pais as string,
-        startDate as string,
-        endDate as string,
-        results
-      );
-
-      ctx.set('Content-Type', 'text/html; charset=utf-8');
-      return ctx.send(html);
-      
-    } catch (error) {
-      ctx.throw(500, `Error al mostrar noticias: ${error.message}`);
-    }
-  },
-  async searchDebug(ctx) {
-    try {
-      const service = strapi.service('api::noticia.noticia-scraper');
-      const results = await service.searchNews();
-      
-      // Función para sanitizar texto
-      const sanitizeText = (text: string) => {
-        try {
-          // Primero limpiamos caracteres de control
-          const cleanText = text.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-          // Luego convertimos entidades HTML comunes
-          return cleanText
-            .replace(/&aacute;/g, 'á')
-            .replace(/&eacute;/g, 'é')
-            .replace(/&iacute;/g, 'í')
-            .replace(/&oacute;/g, 'ó')
-            .replace(/&uacute;/g, 'ú')
-            .replace(/&ntilde;/g, 'ñ')
-            .replace(/&quot;/g, '"')
-            .replace(/&amp;/g, '&');
-        } catch (error) {
-          return text;
-        }
-      };
-
-      const sanitizeUrl = (url: string) => {
-        try {
-          return encodeURI(url);
-        } catch {
-          return url;
-        }
-      };
-      
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-            <title>Resultados de Búsqueda - Corredor Bioceánico</title>
-            <style>
-              body { font-family: Arial, sans-serif; margin: 20px; }
-              .result { border: 1px solid #ddd; padding: 15px; margin: 10px 0; }
-              .title { color: #1a0dab; text-decoration: none; font-size: 18px; }
-              .snippet { color: #4d5156; margin: 5px 0; }
-              .meta { color: #70757a; font-size: 14px; }
-            </style>
-          </head>
-          <body>
-            <h1>Resultados de Búsqueda - Corredor Bioceánico</h1>
-            ${results.map(item => `
-              <div class="result">
-                <a href="${sanitizeUrl(item.link)}" class="title" target="_blank">
-                  ${sanitizeText(item.title)}
-                </a>
-                <p class="snippet">${sanitizeText(item.snippet)}</p>
-                <div class="meta">
-                  Fuente: ${sanitizeText(item.source)}
-                  ${item.publishedTime ? 
-                    `| Publicado: ${new Date(item.publishedTime).toLocaleDateString('es-CL')}` : 
-                    ''}
-                </div>
-              </div>
-            `).join('')}
-          </body>
-        </html>
-      `;
-
-      ctx.set('Content-Type', 'text/html; charset=utf-8');
-      return ctx.send(html);
-    } catch (error) {
-      console.error('Error en searchDebug:', error);
-      ctx.throw(500, `Error al procesar la búsqueda: ${error.message}`);
     }
   },
   async testScraper(ctx) {
@@ -2922,6 +2693,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
   async verNoticia(ctx) {
     try {
       const { id } = ctx.params;
+      const { format = 'html' } = ctx.query; // Nuevo parámetro para especificar el formato
       
       if (!id) {
         return ctx.badRequest('Se requiere un ID de noticia');
@@ -2937,6 +2709,93 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
         return ctx.notFound('Noticia no encontrada');
       }
 
+      // Base URL para rutas relativas
+      const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+
+      // Si se solicita en formato JSON, devolver los datos estructurados
+      if (format === 'json') {
+        // Normalizar featuredImage
+        let featuredImage = null;
+        if (noticia.featuredImage) {
+          featuredImage = {
+            id: noticia.featuredImage.id,
+            name: noticia.featuredImage.name,
+            url: noticia.featuredImage.url?.startsWith('/') 
+              ? `${baseUrl}${noticia.featuredImage.url}` 
+              : noticia.featuredImage.url,
+            formats: {}
+          };
+          
+          // Procesar formatos si existen
+          if (noticia.featuredImage.formats) {
+            const formats = noticia.featuredImage.formats;
+            Object.keys(formats).forEach(format => {
+              if (formats[format] && formats[format].url) {
+                featuredImage.formats[format] = {
+                  url: formats[format].url?.startsWith('/') 
+                    ? `${baseUrl}${formats[format].url}` 
+                    : formats[format].url,
+                  width: formats[format].width,
+                  height: formats[format].height
+                };
+              }
+            });
+          }
+        }
+        
+        // Normalizar additionalImages
+        const additionalImages = [];
+        if (noticia.additionalImages && Array.isArray(noticia.additionalImages)) {
+          for (const img of noticia.additionalImages) {
+            if (!img) continue;
+            
+            const processedImg = {
+              id: img.id,
+              name: img.name,
+              url: img.url?.startsWith('/') 
+                ? `${baseUrl}${img.url}` 
+                : img.url,
+              formats: {}
+            };
+            
+            if (img.formats) {
+              const formats = img.formats;
+              Object.keys(formats).forEach(format => {
+                if (formats[format] && formats[format].url) {
+                  processedImg.formats[format] = {
+                    url: formats[format].url?.startsWith('/') 
+                      ? `${baseUrl}${formats[format].url}` 
+                      : formats[format].url,
+                    width: formats[format].width,
+                    height: formats[format].height
+                  };
+                }
+              });
+            }
+            
+            additionalImages.push(processedImg);
+          }
+        }
+
+        // Devolver la noticia y sus imágenes en formato JSON
+        return {
+          id: noticia.id,
+          title: noticia.title,
+          slug: noticia.slug,
+          content: noticia.content,
+          summary: noticia.summary,
+          publishedAt: noticia.publishedAt,
+          articleDate: noticia.articleDate,
+          pais: noticia.pais,
+          sourceName: noticia.sourceName,
+          sourceUrl: noticia.sourceUrl,
+          tags: noticia.tags,
+          featuredImage,
+          additionalImages
+        };
+      }
+
+      // Formato por defecto: HTML
       // Formatear la fecha para mostrarla
       const fechaFormateada = noticia.articleDate 
         ? new Date(noticia.articleDate).toLocaleDateString('es-CL', {
@@ -3000,41 +2859,28 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                 border-radius: 20px;
                 font-size: 12px;
               }
-              .country {
-                background-color: #f8e9e9;
-                color: #e74c3c;
-              }
-              .summary {
-                font-size: 18px;
-                font-weight: 500;
-                margin-bottom: 25px;
-                color: #555;
-                padding: 15px;
-                background-color: #f9f9f9;
-                border-left: 4px solid #3498db;
-              }
               .content {
-                font-size: 16px;
-                margin-top: 20px;
-              }
-              .image-container {
-                margin: 20px 0;
-                text-align: center;
+                margin: 30px 0;
+                line-height: 1.8;
               }
               .featured-image {
-                max-width: 100%;
+                width: 100%;
+                max-height: 500px;
+                object-fit: cover;
                 border-radius: 8px;
-                box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+                margin: 20px 0;
               }
               .additional-images {
                 display: flex;
                 flex-wrap: wrap;
-                gap: 15px;
-                margin-top: 20px;
+                gap: 10px;
+                margin: 20px 0;
               }
               .additional-image {
-                max-width: 200px;
-                border-radius: 5px;
+                width: 150px;
+                height: 150px;
+                object-fit: cover;
+                border-radius: 4px;
               }
               .back-link {
                 display: inline-block;
@@ -3045,21 +2891,6 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
               .back-link:hover {
                 text-decoration: underline;
               }
-              .status {
-                display: inline-block;
-                padding: 4px 8px;
-                border-radius: 4px;
-                font-size: 12px;
-                margin-right: 10px;
-              }
-              .published {
-                background-color: #d4edda;
-                color: #155724;
-              }
-              .draft {
-                background-color: #f8d7da;
-                color: #721c24;
-              }
             </style>
           </head>
           <body>
@@ -3067,47 +2898,39 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
               <h1>${noticia.title}</h1>
               
               <div class="meta">
-                <div>
-                  <span class="status ${noticia.publishedAt ? 'published' : 'draft'}">
-                    ${noticia.publishedAt ? 'Publicada' : 'Borrador'}
-                  </span>
-                </div>
-                <div>Fecha: ${fechaFormateada}</div>
-                <div>País: ${noticia.pais ? noticia.pais.toUpperCase() : 'No especificado'}</div>
+                <div>ID: ${noticia.id}</div>
+                <div>Creada: ${new Date(noticia.createdAt).toLocaleString()}</div>
+                ${noticia.publishedAt ? `<div>Publicada: ${new Date(noticia.publishedAt).toLocaleString()}</div>` : ''}
+                ${noticia.pais ? `<div>País: ${noticia.pais}</div>` : ''}
                 ${noticia.sourceName ? `<div>Fuente: ${noticia.sourceName}</div>` : ''}
-                ${noticia.sourceUrl ? `<div>URL original: <a href="${noticia.sourceUrl}" target="_blank">Ver fuente</a></div>` : ''}
               </div>
-
+              
+              ${noticia.tags && noticia.tags.length > 0 ? `
+                <div class="tags">
+                  ${noticia.tags.map(tag => `<span class="tag">${tag.nombre || tag.name || ''}</span>`).join('')}
+                </div>
+              ` : ''}
+              
+              <div class="summary">${noticia.summary || ''}</div>
+              
               ${noticia.featuredImage ? `
-                <div class="image-container">
-                  <img class="featured-image" src="${noticia.featuredImage.url}" alt="${noticia.title}">
-                </div>
+                <img class="featured-image" src="${
+                  noticia.featuredImage.url.startsWith('/') 
+                    ? baseUrl + noticia.featuredImage.url 
+                    : noticia.featuredImage.url
+                }" alt="${noticia.title}">
+                <div>Imagen Destacada: ${noticia.featuredImage.name || ''}</div>
               ` : ''}
-
-              ${noticia.summary ? `
-                <div class="summary">
-                  ${noticia.summary}
-                </div>
-              ` : ''}
-
-              <div class="tags">
-                ${noticia.tags && noticia.tags.length > 0 ? noticia.tags.map(tag => `
-                  <span class="tag">${tag.nombre || tag.name || ''}</span>
-                `).join('') : ''}
-                ${noticia.pais ? `<span class="tag country">${noticia.pais.toUpperCase()}</span>` : ''}
-              </div>
-
-              <div class="content">
-                ${noticia.content ? noticia.content.split('\n').map(paragraph => 
-                  paragraph.trim() ? `<p>${paragraph}</p>` : ''
-                ).join('') : '<p>No hay contenido disponible</p>'}
-              </div>
-
+              
+              <div class="content">${noticia.content || ''}</div>
+              
               ${noticia.additionalImages && noticia.additionalImages.length > 0 ? `
-                <h3>Imágenes adicionales</h3>
+                <h3>Imágenes Adicionales (${noticia.additionalImages.length}):</h3>
                 <div class="additional-images">
                   ${noticia.additionalImages.map(img => `
-                    <img class="additional-image" src="${img.url}" alt="">
+                    <img class="additional-image" src="${
+                      img.url.startsWith('/') ? baseUrl + img.url : img.url
+                    }" alt="">
                   `).join('')}
                 </div>
               ` : ''}
