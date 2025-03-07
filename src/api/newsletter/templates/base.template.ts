@@ -46,7 +46,11 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
       <tr>
         <td style="padding: 0 20px;">
           <table width="100%" style="border-collapse: collapse;">
-            ${noticias.map(noticia => renderArticle(noticia)).join('')}
+            ${noticias.map(noticia => {
+              // Log simplificado de renderizado
+              console.log(`📄 Renderizando: ${noticia.title?.substring(0, 30)}...`);
+              return renderArticle(noticia);
+            }).join('')}
           </table>
         </td>
       </tr>
@@ -67,7 +71,7 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
     </tr>
   ` : '';
 
-  return `
+  const template = `
     <!DOCTYPE html>
     <html>
       <head>
@@ -168,5 +172,8 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
       </body>
     </html>
   `;
+
+  console.log('📧 Plantilla HTML generada correctamente');
+  return template;
 };
  

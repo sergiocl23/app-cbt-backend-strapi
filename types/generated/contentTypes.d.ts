@@ -563,6 +563,46 @@ export interface ApiCompanyCompany extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiEmailQueueEmailQueue extends Struct.CollectionTypeSchema {
+  collectionName: 'email_queues';
+  info: {
+    singularName: 'email-queue';
+    pluralName: 'email-queues';
+    displayName: 'Email Queue';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'processing', 'completed', 'failed']
+    > &
+      Schema.Attribute.DefaultTo<'pending'>;
+    newsletter: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::newsletter.newsletter'
+    >;
+    startTime: Schema.Attribute.DateTime;
+    completedAt: Schema.Attribute.DateTime;
+    totalJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    completedJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    failedJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    jobs: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::email-queue.email-queue'
+    >;
+  };
+}
+
 export interface ApiForumTagForumTag extends Struct.CollectionTypeSchema {
   collectionName: 'forum_tags';
   info: {
@@ -620,6 +660,36 @@ export interface ApiInterestInterest extends Struct.CollectionTypeSchema {
       'oneToMany',
       'api::interest.interest'
     >;
+  };
+}
+
+export interface ApiMetricMetric extends Struct.CollectionTypeSchema {
+  collectionName: 'metrics';
+  info: {
+    singularName: 'metric';
+    pluralName: 'metrics';
+    displayName: 'Metric';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    key: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    value: Schema.Attribute.Float & Schema.Attribute.DefaultTo<0>;
+    date: Schema.Attribute.Date & Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::metric.metric'>;
   };
 }
 
@@ -1400,8 +1470,10 @@ declare module '@strapi/strapi' {
       'plugin::users-permissions.user': PluginUsersPermissionsUser;
       'api::category.category': ApiCategoryCategory;
       'api::company.company': ApiCompanyCompany;
+      'api::email-queue.email-queue': ApiEmailQueueEmailQueue;
       'api::forum-tag.forum-tag': ApiForumTagForumTag;
       'api::interest.interest': ApiInterestInterest;
+      'api::metric.metric': ApiMetricMetric;
       'api::newsletter.newsletter': ApiNewsletterNewsletter;
       'api::noticia.noticia': ApiNoticiaNoticia;
       'api::point.point': ApiPointPoint;

@@ -11,4 +11,15 @@ export default ({ env }) => ({
     enabled: true,
     tasks: cronTasks,
   },
+  webhooks: {
+    populateRelations: env.bool('WEBHOOKS_POPULATE_RELATIONS', false),
+  },
+  // Configuración del sistema de newsletter
+  newsletter: {
+    defaultLogo: env('NEWSLETTER_DEFAULT_LOGO', '/uploads/logo.png'),
+    dailyLimit: env.int('NEWSLETTER_DAILY_LIMIT', 1000),
+    hourlyLimit: env.int('NEWSLETTER_HOURLY_LIMIT', 150),
+    batchSize: env.int('NEWSLETTER_BATCH_SIZE', 50),
+    delayBetweenBatches: env.int('NEWSLETTER_DELAY_BETWEEN_BATCHES', 3000)
+  }
 });

@@ -289,32 +289,18 @@ export default ({ strapi }) => ({
     try {
       console.log('\n📝 Generando contenido del newsletter...');
       
-      // Calculamos lastDate solo para mostrar el período del newsletter en el texto
       const lastDate = this.calculateLastDate(type);
-      console.log(`Periodo: ${type} (desde ${lastDate.toLocaleString()})`);
+      let noticiasPublicadas = await this.fetchNoticias(lastDate);
       
-      // Obtenemos TODAS las noticias publicadas, sin filtrar por fecha
-      let noticiasPublicadas = [];
-      try {
-        noticiasPublicadas = await this.fetchNoticias(lastDate);
-        console.log(`Noticias publicadas obtenidas: ${noticiasPublicadas.length}`);
-      } catch (fetchError) {
-        console.error('❌ Error obteniendo noticias:', fetchError);
-        console.log('⚠️ Continuando con 0 noticias...');
-      }
-      
-      // Verificar que tenemos un array válido
       if (!Array.isArray(noticiasPublicadas)) {
         console.log('⚠️ fetchNoticias no devolvió un array válido. Usando array vacío.');
         noticiasPublicadas = [];
       }
       
-      // Forzar un array válido y eliminar elementos null/undefined
       const noticiasValidas = noticiasPublicadas.filter(n => n !== null && n !== undefined);
-      console.log(`Noticias válidas para el newsletter: ${noticiasValidas.length}`);
+      console.log(`📰 Noticias encontradas: ${noticiasValidas.length}`);
       
-      // Inicializar con estructura vacía
-      let noticiasPorPais: NoticiasPorPais = {
+      let noticiasPorPais = {
         argentina: [],
         brasil: [],
         chile: [],
@@ -322,43 +308,30 @@ export default ({ strapi }) => ({
         mundo: []
       };
       
-      try {
-        // Solo intentar agrupar si hay noticias válidas
-        if (noticiasValidas.length > 0) {
-          noticiasPorPais = this.agruparNoticiasPorPais(noticiasValidas);
-        } else {
-          console.log('⚠️ No hay noticias válidas para agrupar');
-        }
-        
-        // Log de distribución por país
-        console.log('Distribución por país:');
-        Object.entries(noticiasPorPais).forEach(([pais, noticias]) => {
-          if (Array.isArray(noticias) && noticias.length > 0) {
-            console.log(`└── ${pais}: ${noticias.length}`);
-          }
-        });
-      } catch (groupError) {
-        console.error('❌ Error agrupando noticias por país:', groupError);
+      if (noticiasValidas.length > 0) {
+        noticiasPorPais = this.agruparNoticiasPorPais(noticiasValidas);
       }
       
       const periodoTexto = this.getPeriodoTexto(type, new Date());
-      console.log(`Periodo texto: "${periodoTexto}"`);
-
       const subject = `Novedades del Corredor Bioceánico - ${format(new Date(), "d 'de' MMMM", { locale: es })}`;
+      
+      const htmlContent = renderNewsletter(noticiasPorPais, type, periodoTexto);
+      
+      console.log('\n📧 Resumen del newsletter:');
       console.log(`└── Asunto: ${subject}`);
-      console.log(`└── Noticias incluidas: ${noticiasValidas.length}`);
+      console.log(`└── Total noticias: ${noticiasValidas.length}`);
       
       return {
         subject,
-        content: renderNewsletter(noticiasPorPais, type, periodoTexto),
+        content: htmlContent,
+        html: htmlContent,
         noticias: noticiasValidas.map(n => n.id)
       };
     } catch (error) {
       console.error('❌ Error generando contenido:', error);
       
-      // Respuesta de emergencia - newsletter vacío pero funcional
       const periodoTexto = this.getPeriodoTexto(type, new Date());
-      const emptyStructure: NoticiasPorPais = {
+      const emptyStructure = {
         argentina: [],
         brasil: [],
         chile: [],
@@ -366,9 +339,12 @@ export default ({ strapi }) => ({
         mundo: []
       };
       
+      const htmlContent = renderNewsletter(emptyStructure, type, periodoTexto);
+      
       return {
         subject: `Novedades del Corredor Bioceánico - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
-        content: renderNewsletter(emptyStructure, type, periodoTexto),
+        content: htmlContent,
+        html: htmlContent,
         noticias: []
       };
     }
@@ -514,9 +490,6 @@ export default ({ strapi }) => ({
   calculateLastDate(type: string) {
     const today = new Date();
     
-    // Guardar hora actual para logs
-    const currentTimeStr = today.toLocaleTimeString();
-    
     switch(type) {
       case 'monthly':
         today.setMonth(today.getMonth() - 1);
@@ -529,26 +502,16 @@ export default ({ strapi }) => ({
         break;
     }
     
-    // Establecer la hora a 00:00:00 (principio del día)
+    // Establecer la hora a 00:00:00
     today.setHours(0, 0, 0, 0);
-    
-    console.log(`Calculando fecha límite para newsletter tipo: ${type}`);
-    console.log(`De: Hora actual (${currentTimeStr})`);
-    console.log(`A: ${today.toLocaleString()} (principio del día)`);
     
     return today;
   },
 
   async fetchNoticias(lastDate: Date) {
-    console.log('Buscando noticias desde:', lastDate);
-    console.log('Fecha de búsqueda en formato ISO:', lastDate.toISOString());
-    
     try {
       // Primer intento con entityService y populate detallado
-      console.log('Intentando obtener todas las noticias publicadas con entityService...');
-      
       try {
-        // Enfoque directo de Strapi v5 con populate específico
         const noticias = await strapi.entityService.findMany('api::noticia.noticia', {
           filters: {
             publishedAt: {
@@ -556,53 +519,31 @@ export default ({ strapi }) => ({
             }
           },
           populate: {
-            featuredImage: true, // Cargar la relación featuredImage
-            additionalImages: true, // Cargar imágenes adicionales
+            featuredImage: true,
+            additionalImages: true,
             tags: true
           }
         });
         
-        console.log(`Noticias encontradas (populate avanzado): ${noticias?.length || 0}`);
-        
         if (noticias && noticias.length > 0) {
-          // Obtenemos el ID de las noticias para diagnóstico
-          console.log('IDs de noticias encontradas:', noticias.map(n => n.id).join(', '));
-          
-          // Inspeccionar la estructura de featuredImage para diagnóstico
-          noticias.forEach(n => {
-            if (n.featuredImage) {
-              console.log(`Noticia ID ${n.id} - Tipo de featuredImage:`, typeof n.featuredImage);
-              console.log(`Noticia ID ${n.id} - Estructura:`, JSON.stringify(n.featuredImage).substring(0, 100) + '...');
-            } else {
-              console.log(`Noticia ID ${n.id} - Sin featuredImage`);
-            }
-          });
-          
-          // Si tenemos resultados, los devolvemos
           return noticias;
         }
       } catch (error) {
         console.error('Error con populate avanzado:', error);
       }
       
-      // Si llegamos aquí, el método anterior falló
       // Enfoque alternativo: cargar manualmente las relaciones
       try {
-        console.log('Intentando carga manual de relaciones usando files_related_mph...');
-        
-        // 1. Obtener todas las noticias publicadas
         const noticiasBasicas = await strapi.db.query('api::noticia.noticia').findMany({
           where: { publishedAt: { $ne: null } }
         });
         
-        console.log(`Noticias básicas encontradas: ${noticiasBasicas.length}`);
+        console.log(`📰 Noticias encontradas: ${noticiasBasicas.length}`);
         
-        // 2. Para cada noticia, cargar manualmente sus imágenes
+        // Cargar manualmente las relaciones de archivos
         const noticiasCompletas = await Promise.all(
           noticiasBasicas.map(async noticia => {
             try {
-              // Cargar las relaciones de archivos para esta noticia
-              // Usamos el nombre correcto de la tabla: files_related_mph
               const fileRelations = await strapi.db.query('files_related_mph').findMany({
                 where: {
                   related_id: noticia.id,
@@ -610,66 +551,30 @@ export default ({ strapi }) => ({
                 }
               });
               
-              console.log(`Noticia ID ${noticia.id} - Relaciones de archivos:`, 
-                fileRelations.length > 0 ? fileRelations.length : 'Ninguna');
-              
-              // Log más detallado de las relaciones
               if (fileRelations.length > 0) {
-                fileRelations.forEach(relation => {
-                  console.log(`  → Relación: file_id=${relation.file_id}, field=${relation.field}, order=${relation.order}`);
-                });
-              }
-              
-              // Cargar los archivos relacionados
-              const filePromises = fileRelations.map(async relation => {
-                try {
-                  // Usar el UID correcto para el modelo de archivos en Strapi v5
-                  const file = await strapi.entityService.findOne('plugin::upload.file', relation.file_id);
-                  
-                  if (file) {
-                    console.log(`  → Archivo cargado: id=${file.id}, name=${file.name}, url=${file.url}`);
-                  } else {
-                    console.log(`  → No se encontró archivo con id=${relation.file_id}`);
-                  }
-                  
-                  return {
-                    relation,
-                    file
-                  };
-                } catch (fileError) {
-                  console.error(`Error cargando archivo ${relation.file_id}:`, fileError);
-                  return { relation, file: null };
-                }
-              });
-              
-              // Esperar a que todas las consultas de archivos se completen
-              const fileResults = await Promise.all(filePromises);
-              
-              // Agrupar los archivos por campo
-              const files = {};
-              fileResults.forEach(result => {
-                if (result.file) {
-                  const field = result.relation.field;
-                  
-                  if (!files[field]) {
+                const fileResults = await Promise.all(
+                  fileRelations.map(async relation => {
+                    try {
+                      const file = await strapi.entityService.findOne('plugin::upload.file', relation.file_id);
+                      return { relation, file };
+                    } catch (fileError) {
+                      return { relation, file: null };
+                    }
+                  })
+                );
+                
+                const files = {};
+                fileResults.forEach(result => {
+                  if (result.file) {
+                    const field = result.relation.field;
                     files[field] = result.relation.order === 1 ? result.file : [result.file];
-                  } else if (Array.isArray(files[field])) {
-                    files[field].push(result.file);
-                  } else {
-                    files[field] = [files[field], result.file];
                   }
-                }
-              });
-              
-              console.log(`Noticia ID ${noticia.id} - Campos de archivos añadidos:`, Object.keys(files).join(', '));
-              
-              // Añadir los archivos a la noticia
-              return {
-                ...noticia,
-                ...files
-              };
+                });
+                
+                return { ...noticia, ...files };
+              }
+              return noticia;
             } catch (relationError) {
-              console.error(`Error cargando relaciones para noticia ${noticia.id}:`, relationError);
               return noticia;
             }
           })
@@ -680,18 +585,7 @@ export default ({ strapi }) => ({
         console.error('Error con carga manual:', manualError);
       }
       
-      // Enfoque alternativo (el original)
-      console.log('Usando enfoque alternativo con filtrado manual...');
-      
-      // Obtener todas las noticias primero
-      const allNoticias = await strapi.db.query('api::noticia.noticia').findMany({});
-      console.log(`Total de noticias en la base de datos: ${allNoticias?.length || 0}`);
-      
-      // Filtrar manualmente por publishedAt no nulo
-      const noticiasPublicadas = allNoticias.filter(n => n && n.publishedAt !== null);
-      console.log(`Noticias publicadas (filtro manual): ${noticiasPublicadas.length}`);
-      
-      return noticiasPublicadas;
+      return [];
     } catch (error) {
       console.error('❌ Error al buscar noticias:', error);
       return [];
@@ -708,39 +602,27 @@ export default ({ strapi }) => ({
     };
 
     if (!noticias || noticias.length === 0) {
-      console.log('⚠️ No hay noticias para agrupar por país');
       return noticiasPorPais;
     }
-    
-    console.log(`Agrupando ${noticias.length} noticias por país...`);
 
     noticias.forEach(noticia => {
-      if (!noticia) {
-        console.log('⚠️ Noticia nula encontrada al agrupar por país');
-        return; // Continuar con la siguiente noticia
-      }
+      if (!noticia) return;
       
-      // Normalizar el país (minúsculas, sin espacios)
       const paisNormalizado = (noticia.pais || '').toLowerCase().trim();
-      
-      // Diagnóstico
-      console.log(`Agrupando noticia ID: ${noticia.id}, Título: ${noticia.title?.substring(0, 25) || 'Sin título'}`);
-      console.log(`   → País: ${paisNormalizado || 'No definido'}`);
       
       if (paisNormalizado && noticiasPorPais.hasOwnProperty(paisNormalizado)) {
         noticiasPorPais[paisNormalizado].push(noticia);
-        console.log(`Añadiendo noticia "${noticia.title?.substring(0, 30) || 'Sin título'}..." a país: ${paisNormalizado}`);
       } else {
-        // Si el país no está en nuestras categorías o no está definido, va a 'mundo'
         noticiasPorPais.mundo.push(noticia);
-        console.log(`Noticia con país "${noticia.pais || 'no definido'}" asignada a: mundo`);
       }
     });
 
-    // Log de resultados
-    console.log('Resumen de agrupación:');
+    // Log de distribución
+    console.log('\n📊 Distribución de noticias:');
     Object.entries(noticiasPorPais).forEach(([pais, noticias]) => {
-      console.log(`└── ${pais}: ${noticias.length} noticias`);
+      if (noticias.length > 0) {
+        console.log(`└── ${pais}: ${noticias.length}`);
+      }
     });
 
     return noticiasPorPais;
@@ -866,22 +748,21 @@ export default ({ strapi }) => ({
 
   async sendEmail(subscriber: Subscriber, content: EmailContent) {
     try {
-      // Configurar opciones de correo
       const emailOptions = {
         to: subscriber.email,
         from: process.env.SMTP_FROM,
         subject: content.subject,
-        html: content.html,
+        html: content.content || content.html,
         attachments: [
           {
             filename: 'logo.png',
-            path: './public/uploads/thumbnail_CBioceánicoTarapacáfondo blanco.png',
-            cid: 'logo' // ID de referencia para usar en el HTML como cid:logo
+            path: './public/uploads/LOGO-GORE-TARAPACA-240x112.png',
+            cid: 'logo'
           },
           {
             filename: 'logo_gore.png',
-            path: './public/uploads/LOGO-GORE-TARAPACA-300x140.png',
-            cid: 'logo_gore' // ID de referencia para usar en el HTML como cid:logo_gore
+            path: './public/uploads/LOGO-GORE-TARAPACA-240x112.png',
+            cid: 'logo_gore'
           }
         ]
       };
@@ -889,25 +770,19 @@ export default ({ strapi }) => ({
       // Enviar correo
       await strapi.plugins['email'].services.email.send(emailOptions);
       
-      // Actualizar la fecha del último newsletter enviado para este suscriptor
+      // Actualizar la fecha del último newsletter y métricas
       await this.updateLastNewsletterSent(subscriber.id);
       
+      console.log(`✅ Email enviado: ${subscriber.email}`);
       return true;
     } catch (error) {
-      console.error('Error al enviar email:', error);
+      console.error(`❌ Error al enviar email a ${subscriber.email}: ${error.message}`);
       return false;
     }
   },
 
-  /**
-   * Actualiza la fecha del último newsletter enviado para un suscriptor específico
-   * @param subscriberId ID del suscriptor
-   */
-  async updateLastNewsletterSent(subscriberId: number) {
+  async updateLastNewsletterSent(subscriberId: number, updateMetrics: boolean = false) {
     try {
-      console.log(`Actualizando fecha de último newsletter para suscriptor ID: ${subscriberId}`);
-      
-      // Obtener la fecha actual
       const now = new Date();
       
       // Actualizar el campo lastNewsletterSent
@@ -918,18 +793,14 @@ export default ({ strapi }) => ({
         }
       });
       
-      // Obtener el email del suscriptor para los logs
-      const subscriber = await strapi.entityService.findOne('api::subscriber.subscriber', subscriberId);
-      
-      console.log(`✅ Fecha de último newsletter actualizada para suscriptor: ${subscriber.email} (ID: ${subscriberId})`);
-      console.log(`  └── Actualizado a: ${now.toISOString()}`);
-      
-      // Registrar métricas de actividad
-      this.incrementDailyMetric('updateLastNewsletterCount');
+      // Solo actualizar métricas si se solicita explícitamente
+      if (updateMetrics) {
+        await this.incrementDailyMetric('updateLastNewsletterCount');
+      }
       
       return true;
     } catch (error) {
-      console.error(`Error al actualizar fecha de último newsletter para suscriptor ID: ${subscriberId}:`, error);
+      console.error(`❌ Error actualizando newsletter para suscriptor ${subscriberId}:`, error);
       return false;
     }
   },
@@ -1045,65 +916,98 @@ export default ({ strapi }) => ({
    */
   async incrementDailyMetric(metricName: string, value: number = 1) {
     try {
-      // Verificar si el modelo metric existe usando try/catch para mayor seguridad
       let modelExists = false;
       try {
         modelExists = strapi.db.query('api::metric.metric') !== undefined;
       } catch (e) {
-        console.log(`⚠️ Error al verificar modelo api::metric.metric: ${e.message}`);
+        console.error(`❌ Error verificando modelo metric: ${e.message}`);
         return false;
       }
       
       if (!modelExists) {
-        console.log(`⚠️ Modelo api::metric.metric no encontrado, saltando incremento de métricas`);
+        console.error('❌ Modelo metric no encontrado');
         return false;
       }
       
-      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+      const today = new Date().toISOString().split('T')[0];
       const metricKey = `daily_metrics_${today}`;
       
-      // Obtener métricas actuales o inicializar
-      let metrics = await strapi.db.query('api::metric.metric').findOne({
+      let metric = await strapi.db.query('api::metric.metric').findOne({
         where: { key: metricKey }
       });
       
-      if (!metrics) {
-        // Crear registro de métricas para hoy
-        metrics = await strapi.db.query('api::metric.metric').create({
-          data: {
-            key: metricKey,
-            value: JSON.stringify({
+      if (!metric) {
+        try {
+          const initialMetadata = {
+            emailsSent: 0,
+            emailsFailed: 0,
+            subscribersUpdated: 0,
+            updateLastNewsletterCount: 0,
+            lastUpdated: new Date().toISOString()
+          };
+
+          metric = await strapi.entityService.create('api::metric.metric', {
+            data: {
+              name: `Métricas diarias ${today}`,
+              key: metricKey,
+              value: 0,
               date: today,
-              emailsSent: 0,
-              emailsFailed: 0,
-              subscribersUpdated: 0,
-              updateLastNewsletterCount: 0
-            })
+              metadata: initialMetadata
+            }
+          });
+          console.log(`✅ Nuevo registro de métricas creado para ${today}`);
+        } catch (createError) {
+          console.error('❌ Error creando métricas:', createError);
+          return false;
+        }
+      }
+      
+      try {
+        const currentValue = parseFloat(metric.value) || 0;
+        const newValue = currentValue + value;
+        
+        let currentMetadata = {};
+        try {
+          if (typeof metric.metadata === 'string') {
+            currentMetadata = JSON.parse(metric.metadata);
+          } else if (typeof metric.metadata === 'object') {
+            currentMetadata = metric.metadata;
+          }
+        } catch (parseError) {
+          console.error('❌ Error parseando metadatos, reinicializando...');
+          currentMetadata = {
+            emailsSent: 0,
+            emailsFailed: 0,
+            subscribersUpdated: 0,
+            updateLastNewsletterCount: 0
+          };
+        }
+
+        if (typeof currentMetadata[metricName] !== 'number') {
+          currentMetadata[metricName] = 0;
+        }
+
+        const updatedMetadata = {
+          ...currentMetadata,
+          lastUpdated: new Date().toISOString(),
+          [metricName]: (currentMetadata[metricName] || 0) + value
+        };
+        
+        await strapi.entityService.update('api::metric.metric', metric.id, {
+          data: {
+            value: newValue,
+            metadata: updatedMetadata
           }
         });
+        
+        console.log(`📊 Métrica ${metricName}: ${currentMetadata[metricName] || 0} → ${updatedMetadata[metricName]}`);
+        return true;
+      } catch (updateError) {
+        console.error('❌ Error actualizando métrica:', updateError.message);
+        return false;
       }
-      
-      // Parsear el valor actual
-      const currentMetrics = JSON.parse(metrics.value);
-      
-      // Incrementar la métrica específica
-      if (currentMetrics[metricName] !== undefined) {
-        currentMetrics[metricName] += value;
-      } else {
-        currentMetrics[metricName] = value;
-      }
-      
-      // Actualizar el registro
-      await strapi.db.query('api::metric.metric').update({
-        where: { id: metrics.id },
-        data: {
-          value: JSON.stringify(currentMetrics)
-        }
-      });
-      
-      return true;
     } catch (error) {
-      console.error(`Error al incrementar métrica ${metricName}:`, error);
+      console.error(`❌ Error en incrementDailyMetric:`, error.message);
       return false;
     }
   },

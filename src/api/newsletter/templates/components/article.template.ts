@@ -110,134 +110,19 @@ export const renderArticle = (noticia: any) => {
     // Obtener URL de la imagen usando diferentes estrategias
     let imageUrl = '';
     
-    // 1. Función para extraer URL de cualquier objeto de imagen de Strapi
-    const extractImageUrl = (mediaObj: any): string => {
-      if (!mediaObj) return '';
+    // Validar imagen y obtener URL
+    const getImageUrl = (noticia: any) => {
+      if (!noticia) return 'cid:logo';
       
-      console.log(`Extrayendo URL de imagen para noticia ID ${id} (tipo: ${typeof mediaObj})`);
-      
-      // Si es una cadena, es una URL directa
-      if (typeof mediaObj === 'string') {
-        console.log(`  → URL directa: ${mediaObj}`);
-        return mediaObj;
+      if (noticia.mainImage?.url) {
+        const url = noticia.mainImage.url;
+        return url.startsWith('data:') ? 'cid:logo' : url;
       }
       
-      // Para formato de tabla files directamente
-      if (mediaObj.hash && mediaObj.ext) {
-        const fileUrl = `/uploads/${mediaObj.hash}${mediaObj.ext}`;
-        console.log(`  → URL de tabla files: ${fileUrl}`);
-        return fileUrl;
-      }
-      
-      // Si tiene url directamente, usarla
-      if (mediaObj.url) {
-        console.log(`  → URL en objeto: ${mediaObj.url}`);
-        return mediaObj.url;
-      }
-      
-      // Si tiene formatos, intentar obtener una versión adecuada
-      if (mediaObj.formats) {
-        const formatUrl = mediaObj.formats.small?.url || 
-                         mediaObj.formats.medium?.url || 
-                         mediaObj.formats.thumbnail?.url;
-        if (formatUrl) {
-          console.log(`  → URL de formato: ${formatUrl}`);
-          return formatUrl;
-        }
-      }
-      
-      // Estructura especial para las imágenes cargadas con entityService
-      if (mediaObj.provider_metadata && mediaObj.provider === 'local') {
-        // Este es el formato que devuelve entityService para archivos
-        console.log(`  → Archivo local encontrado: name=${mediaObj.name}, url=${mediaObj.url}`);
-        return mediaObj.url;
-      }
-      
-      // Si tiene data, puede ser una relación de Strapi
-      if (mediaObj.data) {
-        const data = mediaObj.data;
-        
-        // Si data es un array, tomar el primer elemento
-        const mediaData = Array.isArray(data) ? data[0] : data;
-        
-        if (!mediaData) return '';
-        
-        // Si tiene atributos con URL
-        if (mediaData.attributes && mediaData.attributes.url) {
-          console.log(`  → URL en attributes: ${mediaData.attributes.url}`);
-          return mediaData.attributes.url;
-        }
-      }
-      
-      // Si tiene un ID y es un objeto, puede ser la imagen directa
-      if (mediaObj.id && typeof mediaObj === 'object') {
-        // Intentar buscar cualquier URL en el objeto
-        const objStr = JSON.stringify(mediaObj);
-        const urlMatch = objStr.match(/"url":"([^"]+)"/);
-        if (urlMatch && urlMatch[1]) {
-          console.log(`  → URL encontrada en JSON: ${urlMatch[1]}`);
-          return urlMatch[1];
-        }
-      }
-      
-      // Intento final: analizar estructura JSON completa para buscar URLs
-      try {
-        const objStr = JSON.stringify(mediaObj);
-        
-        // Buscar patrones de URL en el JSON completo
-        const patterns = [
-          /"url":"([^"]+)"/,           // "url":"..."
-          /\\\/uploads\\\/([^"]+)"/,   // Rutas de uploads escapadas
-          /\/uploads\/([^"]+)"/        // Rutas de uploads directas
-        ];
-        
-        for (const pattern of patterns) {
-          const match = objStr.match(pattern);
-          if (match && match[1]) {
-            const extractedUrl = match[0].includes('/uploads/') 
-              ? `/uploads/${match[1]}`
-              : match[1];
-            console.log(`  → URL extraída de JSON completo: ${extractedUrl}`);
-            return extractedUrl;
-          }
-        }
-      } catch (e) {
-        console.error(`  → Error analizando JSON:`, e);
-      }
-      
-      console.log(`  → No se pudo extraer URL de la imagen`);
-      return '';
+      return 'cid:logo';
     };
-    
-    // Buscar en todas las propiedades que podrían contener una imagen
-    // 1. Primero, buscar en propiedades conocidas
-    if (featuredImage) {
-      imageUrl = extractImageUrl(featuredImage);
-      console.log(`Estrategia 1 - featuredImage: ${imageUrl ? 'Éxito ✅' : 'Fallida ❌'}`);
-    }
-    
-    // 2. Luego, probar mainImage
-    if (!imageUrl && mainImage) {
-      imageUrl = typeof mainImage === 'string' ? mainImage : extractImageUrl(mainImage);
-      console.log(`Estrategia 2 - mainImage: ${imageUrl ? 'Éxito ✅' : 'Fallida ❌'}`);
-    }
-    
-    // 3. Finalmente, buscar en cualquier propiedad que pueda contener una imagen
-    if (!imageUrl) {
-      for (const key of Object.keys(noticia)) {
-        if (key !== 'featuredImage' && key !== 'mainImage' && 
-            noticia[key] && typeof noticia[key] === 'object') {
-          
-          if (key.includes('image') || key.includes('media') || key.includes('file')) {
-            imageUrl = extractImageUrl(noticia[key]);
-            if (imageUrl) {
-              console.log(`Estrategia 3 - Campo ${key}: Éxito ✅`);
-              break;
-            }
-          }
-        }
-      }
-    }
+
+    imageUrl = getImageUrl(noticia);
     
     console.log(`【IMAGEN FINAL】Noticia ID ${id} "${title.substring(0, 15)}..." → ${imageUrl || 'Sin imagen ❌'}`);
 

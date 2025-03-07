@@ -36,6 +36,21 @@ module.exports = {
         policies: [],
         auth: false
       }
+    },
+    {
+      method: 'POST',
+      path: '/newsletters/envio-directo',
+      handler: 'newsletter.envioDirecto',
+      config: {
+        auth: false,
+        policies: [],
+        description: 'Enviar newsletter directamente sin usar el sistema de cola',
+        tag: {
+          plugin: 'newsletter',
+          name: 'Newsletter',
+          actionType: 'create'
+        }
+      }
     }
   ]
 };
