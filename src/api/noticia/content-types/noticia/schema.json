@@ -96,8 +96,7 @@
       "type": "enumeration",
       "enum": [
         "regular",
-        "topicFeatured",
-        "topicSmall"
+        "destacada"
       ],
       "default": "regular"
     },
