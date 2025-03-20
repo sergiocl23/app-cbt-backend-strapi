@@ -795,8 +795,18 @@ export interface ApiNoticiaNoticia extends Struct.CollectionTypeSchema {
       Schema.Attribute.DefaultTo<'chile'>;
     sourceUrl: Schema.Attribute.Text;
     sourceName: Schema.Attribute.String;
-    articleType: Schema.Attribute.Enumeration<['regular', 'destacada']> &
+    articleType: Schema.Attribute.Enumeration<
+      ['regular', 'destacada', 'minimal']
+    > &
       Schema.Attribute.DefaultTo<'regular'>;
+    relevanceScore: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+          max: 100;
+        },
+        number
+      >;
     publishedAt: Schema.Attribute.DateTime;
     articleDate: Schema.Attribute.DateTime;
     manualCreation: Schema.Attribute.Boolean &

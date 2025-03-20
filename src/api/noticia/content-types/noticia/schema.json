@@ -96,9 +96,16 @@
       "type": "enumeration",
       "enum": [
         "regular",
-        "destacada"
+        "destacada",
+        "minimal"
       ],
       "default": "regular"
+    },
+    "relevanceScore": {
+      "type": "integer",
+      "min": 0,
+      "max": 100,
+      "description": "Puntuación de relevancia para artículos minimales (0-100)"
     },
     "publishedAt": {
       "type": "datetime"

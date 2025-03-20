@@ -96,14 +96,6 @@ export default {
         auth: false,
       }
     },
-    {
-      method: 'GET',
-      path: '/noticias/test-scraper',
-      handler: 'noticia.testScraper',
-      config: {
-        auth: false,
-      }
-    },
     // Ruta para eliminar noticia
     {
       method: 'POST',
@@ -118,6 +110,14 @@ export default {
       method: 'GET',
       path: '/noticias/ver/:id',
       handler: 'noticia.verNoticia',
+      config: {
+        auth: false,
+      }
+    },
+    {
+      method: 'GET',
+      path: '/noticias/batch-scrape-country',
+      handler: 'noticia.batchScrapeByCountry',
       config: {
         auth: false,
       }

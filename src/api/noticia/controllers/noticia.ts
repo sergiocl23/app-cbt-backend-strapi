@@ -10,79 +10,8 @@ const logger = {
   error: (...args: any[]) => console.log('\x1b[31m%s\x1b[0m', '[ERROR]', ...args),
 };
 
-//BORRAR DESPUES DE PROBAR
-interface MediaFormat {
-  url: string;
-  width: number;
-  height: number;
-  hash: string;
-  mime: string;
-  name: string;
-  size: number;
-}
 
-interface Media {
-  id: string | number;
-  url: string;
-  formats?: {
-    thumbnail?: MediaFormat;
-    small?: MediaFormat;
-    medium?: MediaFormat;
-    large?: MediaFormat;
-  };
-}
 
-interface Noticia {
-  id: string | number;
-  title?: string;
-  content?: any;
-  summary?: string;
-  mainImage?: string;
-  additionalImages?: Media[];
-  publishedAt?: string | Date;
-  createdAt?: string | Date;
-  updatedAt?: string | Date;
-  tags?: {
-    id: number;
-    nombre: string;
-  }[];
-  pais?: ("chile" | "paraguay" | "brasil" | "argentina")[];
-}
-
-interface NoticiaEntity {
-  id: any;
-  title: string;
-  slug: string;
-  content: string;
-  summary?: string;
-  publishedAt: Date | null;
-  pais: string;
-  sourceName?: string;
-  articleType?: string;
-  articleDate?: Date | string; // Añadir esta propiedad
-  featuredImage?: any;
-  additionalImages?: any[];
-  tags?: any[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-interface NoticiaType {
-  id: number;
-  title?: string;
-  content?: string;
-  summary?: string;
-  mainImage?: string;
-  sourceUrl?: string;
-  sourceName?: string;
-  publishedAt?: Date;
-  articleDate?: Date;
-  pais?: string;
-  tags?: any[];
-  articleType?: string;
-  status?: string;
-}
-//BORRAR LUEGO DE USAR
 
 interface PaginationQuery {
   pagination?: {
@@ -94,27 +23,7 @@ interface PaginationQuery {
   populate?: string;
 }
 
-interface FilterQuery {
-  $eq?: string;
-  $ne?: string;
-  $lt?: string | number;
-  $lte?: string | number;
-  $gt?: string | number;
-  $gte?: string | number;
-  $in?: string[];
-  $notIn?: string[];
-  $contains?: string;
-  $containsi?: string;
-  $or?: Array<Record<string, any>>;
-}
 
-interface NoticiaFilters {
-  pais?: FilterQuery;
-  publishedAt?: FilterQuery;
-  'tags.nombre'?: FilterQuery;
-  title?: FilterQuery;
-  content?: FilterQuery;
-}
 
 interface FilterParams {
   tags?: string;
@@ -123,122 +32,8 @@ interface FilterParams {
   pais?: string;
 }
 
-// Función helper para formatear fechas
-const formatDate = (date: string, isEndDate: boolean = false) => {
-  const d = new Date(date);
-  d.setHours(isEndDate ? 23 : 0);
-  d.setMinutes(isEndDate ? 59 : 0);
-  d.setSeconds(isEndDate ? 59 : 0);
-  d.setMilliseconds(isEndDate ? 999 : 0);
-  return d.toISOString();
-};
 
-// Template HTML para la vista de prueba
-const getViewTemplate = (availableTags: any[], tags: string[], pais: string, startDate: string, endDate: string, results: any[]) => `
-  <!DOCTYPE html>
-  <html>
-    <head>
-      <title>Vista de Prueba - Filtros</title>
-      <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        .filtros { background: #f5f5f5; padding: 20px; margin-bottom: 20px; }
-        .filtro-group { margin-bottom: 10px; }
-        .noticia { border: 1px solid #ddd; padding: 15px; margin-bottom: 10px; }
-        .tags { color: #666; font-size: 0.9em; }
-        .debug { background: #fff3d4; padding: 10px; margin: 10px 0; }
-        .tags-container {
-          display: grid;
-          grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-          gap: 10px;
-          padding: 10px;
-          background: white;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-        }
-        .tag-option {
-          display: flex;
-          align-items: center;
-          padding: 5px;
-        }
-        .tag-option input[type="checkbox"] {
-          margin-right: 8px;
-        }
-        .tag-option:hover {
-          background: #f0f0f0;
-        }
-      </style>
-    </head>
-    <body>
-      <h1>Vista de Prueba - Filtros</h1>
-      
-      <div class="filtros">
-        <form method="GET">
-          <div class="filtro-group">
-            <label>Tags:</label>
-            <div class="tags-container">
-              ${availableTags.map(tag => `
-                <label class="tag-option">
-                  <input type="checkbox" 
-                         name="tags" 
-                         value="${tag.nombre}"
-                         ${tags?.includes(tag.nombre) ? 'checked' : ''}>
-                  ${tag.nombre}
-                </label>
-              `).join('')}
-            </div>
-          </div>
-          
-          <div class="filtro-group">
-            <label>País:</label>
-            <select name="pais">
-              <option value="">Todos</option>
-              ${['chile', 'paraguay', 'brasil', 'argentina', 'mundo'].map(p => `
-                <option value="${p}" ${pais === p ? 'selected' : ''}>${p.toUpperCase()}</option>
-              `).join('')}
-            </select>
-          </div>
-          
-          <div class="filtro-group">
-            <label>Fecha desde:</label>
-            <input type="date" name="startDate" value="${startDate || ''}">
-          </div>
-          
-          <div class="filtro-group">
-            <label>Fecha hasta:</label>
-            <input type="date" name="endDate" value="${endDate || ''}">
-          </div>
-          
-          <button type="submit">Filtrar</button>
-          <button type="button" onclick="location.href='/noticias/view'">Limpiar</button>
-        </form>
-      </div>
 
-      <div class="debug">
-        <strong>Parámetros aplicados:</strong><br>
-        Tags: ${tags || 'Ninguno'} | 
-        País: ${pais || 'Todos'} | 
-        Fechas: ${startDate || ''} a ${endDate || ''}
-      </div>
-
-      <h3>Resultados (${results.length} noticias)</h3>
-      
-      ${results.map(noticia => `
-        <div class="noticia">
-          <h3>${noticia.title}</h3>
-          <div>
-            <strong>País:</strong> ${noticia.pais} |
-            <strong>Fecha:</strong> ${noticia.fechaFormateada}
-          </div>
-          <div class="tags">
-            <strong>Tags:</strong> 
-            ${noticia.tags.map(t => t.nombre).join(', ') || 'Sin tags'}
-          </div>
-          <div><em>${noticia.summary?.substring(0, 100)}...</em></div>
-        </div>
-      `).join('')}
-    </body>
-  </html>
-`;
 
 export default factories.createCoreController('api::noticia.noticia', ({ strapi }) => ({
   async find(ctx) {
@@ -401,173 +196,6 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
         error: error.message
       };
       ctx.status = 400;
-    }
-  },
-  async testScraper(ctx) {
-    try {
-      const scraper = strapi.service('api::noticia.noticia-scraper');
-      const scrapedResults = await scraper.scrapeNews();
-
-      // Obtener noticias con campos explícitos
-      const noticias = await strapi.entityService.findMany('api::noticia.noticia', {
-        populate: {
-          tags: true // Populate explícito para relaciones
-        }
-      });
-
-      // Asegúrate de que noticias sea un array
-      const results = Array.isArray(noticias) ? noticias.map((noticia: any) => ({
-        ...noticia,
-        // Convertir pais a string seguro
-        pais: noticia.pais ? String(noticia.pais) : 'País no especificado'
-      })) : [];
-
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <title>Resultados del Scraper</title>
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background: #f5f6fa;
-              }
-              .container {
-                max-width: 1200px;
-                margin: 0 auto;
-              }
-              .article {
-                background: white;
-                border-radius: 12px;
-                padding: 25px;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-              }
-              .title {
-                color: #2c3e50;
-                font-size: 1.5em;
-                margin-bottom: 15px;
-              }
-              .meta {
-                color: #666;
-                font-size: 0.9em;
-                margin-bottom: 15px;
-              }
-              .content {
-                color: #2c3e50;
-                line-height: 1.6;
-              }
-              .image {
-                width: 100%;
-                max-height: 400px;
-                object-fit: cover;
-                border-radius: 8px;
-                margin: 15px 0;
-              }
-              .categories {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin: 15px 0;
-              }
-              .category {
-                background: #e3f2fd;
-                color: #1565c0;
-                padding: 5px 12px;
-                border-radius: 15px;
-                font-size: 0.9em;
-              }
-              pre {
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                overflow-x: auto;
-                font-size: 0.9em;
-                color: #2c3e50;
-              }
-              .content p {
-                margin-bottom: 1.2em;
-                text-align: justify;
-              }
-              .no-image {
-                background: #f5f5f5;
-                padding: 20px;
-                text-align: center;
-                border-radius: 8px;
-                color: #666;
-              }
-              .summary {
-                background: #f8f9fa;
-                padding: 15px;
-                border-radius: 8px;
-                margin-bottom: 20px;
-                border-left: 4px solid #2196F3;
-              }
-              .summary h3 {
-                color: #1565c0;
-                margin-top: 0;
-              }
-              .country {
-                background: #e8f5e9;
-                color: #2e7d32;
-              }
-              .full-content {
-                margin-top: 20px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Resultados del Test Scraper</h1>
-              ${results.map(result => `
-                <div class="article">
-                  <h2 class="title">${result.title || 'Sin título'}</h2>
-                  <div class="meta">
-                    <div>Fuente: ${result.sourceName}</div>
-                    <div>País: ${result.pais.toUpperCase()}</div>
-                    <div>Fecha: ${result.articleDate ? new Date(result.articleDate).toLocaleDateString('es-CL') : 'No disponible'}</div>
-                    <div>URL: <a href="${result.sourceUrl}" target="_blank">${result.sourceUrl}</a></div>
-                  </div>
-                  ${result.mainImage ? `
-                    <img class="image" src="${result.mainImage}" alt="${result.title || 'Imagen de noticia'}">
-                  ` : '<div class="no-image">Sin imagen disponible</div>'}
-                  <div class="categories">
-                    ${result.tags.map(tag => `
-                      <span class="category">${tag.nombre || tag.name || ''}</span>
-                    `).join('')}
-                    ${result.pais ? `
-                      <span class="category country">${result.pais.toUpperCase()}</span>
-                    ` : ''}
-                  </div>
-                  <div class="content">
-                    ${result.summary ? `
-                      <div class="summary">
-                        <h3>Resumen:</h3>
-                        <p>${result.summary}</p>
-                      </div>
-                    ` : ''}
-                    <div class="full-content">
-                      <h3>Contenido:</h3>
-                      ${result.content.split('\n').map(paragraph => 
-                        paragraph.trim() ? `<p>${paragraph}</p>` : ''
-                      ).join('')}
-                    </div>
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </body>
-        </html>
-      `;
-
-      ctx.set('Content-Type', 'text/html; charset=utf-8');
-      return ctx.send(html);
-    } catch (error) {
-      console.error('Error en testScraper:', error);
-      ctx.throw(500, `Error al procesar el test del scraper: ${error.message}`);
     }
   },
   // Helper para obtener tags disponibles
@@ -2946,6 +2574,15 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
     } catch (error) {
       console.error('Error al mostrar noticia:', error);
       ctx.internalServerError('Error al mostrar la noticia');
+    }
+  },
+  async batchScrapeByCountry(ctx) {
+    try {
+      const scraperService = strapi.service('api::noticia.noticia-scraper');
+      const articles = await scraperService.batchScrapeByCountry();
+      return articles;
+    } catch (error) {
+      ctx.throw(500, error);
     }
   }
 }))
