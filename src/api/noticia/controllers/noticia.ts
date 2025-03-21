@@ -64,6 +64,24 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
       // Construir filtros avanzados
       const advancedFilters: any = { ...filters };
 
+      // Manejar el caso especial para relevanceScore nulo
+      if (advancedFilters.relevanceScore && advancedFilters.relevanceScore.$null === 'true') {
+        // Reemplazar el operador $null por $eq: null manteniendo el nombre del campo en camelCase
+        advancedFilters.relevanceScore = {
+          $eq: null
+        };
+      }
+
+      // Manejar conversión de strings a booleanos para manualCreation
+      if (advancedFilters.manualCreation && advancedFilters.manualCreation.$eq) {
+        // Convertir string "true"/"false" a boolean true/false
+        if (advancedFilters.manualCreation.$eq === 'true') {
+          advancedFilters.manualCreation.$eq = true;
+        } else if (advancedFilters.manualCreation.$eq === 'false') {
+          advancedFilters.manualCreation.$eq = false;
+        }
+      }
+
       // Filtrar por tags
       if (tags) {
         const tagList = Array.from(new Set(Array.isArray(tags) ? tags : [tags]));

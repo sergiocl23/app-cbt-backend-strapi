@@ -47,8 +47,8 @@ interface RelevanceResult {
 // CONFIGURACIONES
 // =============================================
 const scraperConfig = {
-  maxArticlesPerTerm: 3, // Reducido para pruebas
-  maxTotalArticles: 10, // Reducido para pruebas
+  maxArticlesPerTerm: 60, // Reducido para pruebas
+  maxTotalArticles: 150, // Reducido para pruebas
   batchDays: 7, 
   optimizedSearchConfig: {
     terms: {

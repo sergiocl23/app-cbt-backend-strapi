@@ -96,7 +96,6 @@
       "type": "enumeration",
       "enum": [
         "regular",
-        "destacada",
         "minimal"
       ],
       "default": "regular"
