@@ -835,18 +835,20 @@ export interface ApiPointPoint extends Struct.CollectionTypeSchema {
     draftAndPublish: false;
   };
   attributes: {
-    id_point: Schema.Attribute.UID;
     name: Schema.Attribute.String;
     description: Schema.Attribute.Text;
-    latitude: Schema.Attribute.Decimal;
-    longitude: Schema.Attribute.Decimal;
-    id_category: Schema.Attribute.Relation<
-      'oneToMany',
-      'api::points-category.points-category'
-    >;
+    latitude: Schema.Attribute.Float;
+    longitude: Schema.Attribute.Float;
     images: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios',
       true
+    >;
+    id_categories: Schema.Attribute.Relation<
+      'manyToMany',
+      'api::points-category.points-category'
+    >;
+    main_image: Schema.Attribute.Media<
+      'images' | 'files' | 'videos' | 'audios'
     >;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -870,14 +872,14 @@ export interface ApiPointsCategoryPointsCategory
     description: '';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
-    id_category: Schema.Attribute.UID;
     name: Schema.Attribute.String;
     description: Schema.Attribute.Text;
-    color: Schema.Attribute.String;
-    points: Schema.Attribute.Relation<'manyToOne', 'api::point.point'>;
+    icon: Schema.Attribute.String;
+    points: Schema.Attribute.Relation<'manyToMany', 'api::point.point'>;
+    icon_size: Schema.Attribute.Float & Schema.Attribute.DefaultTo<0.025>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -913,6 +915,7 @@ export interface ApiPostPost extends Struct.CollectionTypeSchema {
     body: Schema.Attribute.Text;
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
     post: Schema.Attribute.Relation<'manyToOne', 'api::post.post'>;
+    images: Schema.Attribute.Media<'files' | 'images', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -1087,6 +1090,7 @@ export interface ApiTopicTopic extends Struct.CollectionTypeSchema {
       'api::forum-tag.forum-tag'
     >;
     pinned: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    images: Schema.Attribute.Media<'images' | 'files', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

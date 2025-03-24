@@ -38,6 +38,14 @@
       "relation": "manyToOne",
       "target": "api::post.post",
       "inversedBy": "posts"
+    },
+    "images": {
+      "allowedTypes": [
+        "files",
+        "images"
+      ],
+      "type": "media",
+      "multiple": true
     }
   }
 }
