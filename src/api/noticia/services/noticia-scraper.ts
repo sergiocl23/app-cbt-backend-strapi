@@ -17,6 +17,9 @@ interface SearchResult {
     metatags?: Array<{
       'article:published_time'?: string;
     }>;
+    cse_image?: Array<{
+      src?: string;
+    }>;
   };
 }
 
@@ -33,59 +36,43 @@ interface ContentValidationResult {
   reasons: string[];
 }
 
+// Nueva interfaz para resultado de relevancia
+interface RelevanceResult {
+  isRelevant: boolean;
+  score: number;
+  matchedKeywords: string[];
+}
+
 // =============================================
 // CONFIGURACIONES
 // =============================================
-const SEARCH_CONFIG = {
-  maxArticlesPerTerm: 20,
-  maxTotalArticles: 50,
-  batchDays: 180,
-  searchTerms: [
-    'Corredor Bioceánico Chile Paraguay Brasil',
-    'Corredor Bioceánico Vial noticias',
-    'Corredor Bioceânico Brasil Chile Paraguai',
-    'Corredor Rodoviário Bioceânico',
-    'Rota Bioceânica Brasil',
-    'Porto Murtinho Corredor Bioceânico',
-    'Integração Brasil Chile Paraguai',
-    'Corredor Bioceánico Mato Grosso do Sul',
-    'Corredor Bioceánico Campo Grande',
-    'Corredor Bioceánico Porto Murtinho',
-    'Corredor Bioceánico Alto Hospicio',
-    'Corredor Bioceánico Iquique Tarapacá',
-    'Corredor Bioceánico Antofagasta',
-    'Corredor Bioceánico MOPC Paraguay',
-    'Corredor Bioceánico Ministerio Obras',
-    'Corredor Bioceánico Hacienda Chile'
-  ],
-  searchParams: {
-    dateRestrict: 'w2',
-    sort: 'date',
-    exactTerms: 'Corredor Bioceánico|Corredor Bioceânico',
-    dateSort: 'r',
-    filter: '1',
-    lr: 'lang_es|lang_pt',  
-    cr: 'countryBR|countryCL|countryPY|countryAR',
-    siteSearch: [
-      'gov.br',
-      'infraestrutura.gov.br',
-      'correiodopovo.com.br',
-      'gazetadopovo.com.br',
-      'folha.uol.com.br',
-      'campogrande.ms.gov.br',
-      'ms.gov.br',
-      'edicioncero.cl',
-      'reporteminero.cl',
-      'agenciaip.com',
-      'peruconstruye.net',
-      'losandes.com.ar',
-      'gob.pe',
-      'radio45sur.cl',
-      'hacienda.cl',
-      'aduananews.com'
-    ].join('|')
+const scraperConfig = {
+  maxArticlesPerTerm: 60, // Reducido para pruebas
+  maxTotalArticles: 150, // Reducido para pruebas
+  batchDays: 7, 
+  optimizedSearchConfig: {
+    terms: {
+      es: [
+        'Corredor Bioceánico Vial', 
+        'Corredor Bioceánico Capricornio'
+      ],
+      pt: [
+        'Rota Bioceânica', 
+        'Corredor Bioceânico Capricórnio'
+      ]
+    },
+    countries: [
+      { code: 'cl', name: 'Chile', language: 'es' },
+      { code: 'py', name: 'Paraguay', language: 'es' },
+      { code: 'ar', name: 'Argentina', language: 'es' },
+      { code: 'br', name: 'Brasil', language: 'pt' }
+    ]
   },
-  excludedSites: 'facebook.com|twitter.com|instagram.com|linkedin.com|youtube.com|tiktok.com'
+  searchParams: {
+    dateRestrict: 'd7',
+    sort: 'date'
+  },
+  excludedSites: 'facebook.com|twitter.com|instagram.com|linkedin.com|youtube.com|tiktok.com|pinterest.com|scribd.com|slideshare.net|medium.com|issuu.com|archive.org|academia.edu|researchgate.net|google.com|google.cl|google.py|google.br|google.ar|wikipedia.org'
 };
 
 const API_KEYS = [
@@ -95,6 +82,10 @@ const API_KEYS = [
   process.env.GOOGLE_CUSTOM_SEARCH_API_KEY_4
 ];
 
+// =============================================
+// CONSTANTES
+// =============================================
+// Palabras clave relevantes para el corredor bioceánico
 const CORRIDOR_KEYWORDS = {
   nombres: [
     'corredor',
@@ -121,16 +112,33 @@ const CORRIDOR_KEYWORDS = {
     'argentina'
   ],
   temas: [
-    'integración',
-    'integração',
+    'infraestructura',
+    'puertos',
     'comercio',
     'comércio',
     'transporte',
-    'infraestructura',
-    'infraestrutura',
+    'exportación',
+    'exportaciones',
+    'carga',
+    'mercancías',
+    'mercaderias',
+    'integración',
+    'aduana',
     'logística',
+    'carreteras',
     'desarrollo',
-    'desenvolvimento'
+    'inversión',
+    'construcción',
+    'ministros',
+    'presidentes',
+    'mercosur',
+    'ruta',
+    'santos',
+    'antofagasta',
+    'iquique',
+    'murtinho',
+    'carmelo peralta',
+    'puerto murtinho'
   ]
 };
 
@@ -179,15 +187,25 @@ const hf = new HfInference(process.env.HUGGINGFACE_API_KEY || '');
 // 3. Extrae contenido de cada artículo encontrado
 // 4. Valida y almacena en la base de datos de Strapi
 export default ({ strapi }) => ({
-  async scrapeNews(searchTerm = "Corredor Bioceanico") {
+  async scrapeNews(searchTerm = "Corredor Bioceanico", country?: string) {
     try {
       // Fase 1: Búsqueda de noticias
       logger.info('=== INICIANDO SCRAPING DE NOTICIAS ===');
-      const results = await this.searchNews(searchTerm);
+      const results = await this.searchNews(searchTerm, country);
+      
+      // Mostrar TODOS los enlaces encontrados inicialmente
+      console.log('=== TODOS LOS ENLACES ENCONTRADOS ===');
+      console.table(results.map(result => ({
+        Título: result.title,
+        URL: result.link,
+        Fuente: result.source,
+        Fecha: result.publishedTime || 'No disponible'
+      })));
       
       // Fase 2: Procesamiento de resultados
       const savedArticles = [];
       const failedDomains = [];
+      const minimalArticles = []; // Nuevo array para almacenar artículos minimales
       
       for (const result of results) {
         try {
@@ -204,9 +222,32 @@ export default ({ strapi }) => ({
           // Fase 3: Extracción de contenido del artículo
           const articleData = await this.extractArticleData(result.link, result);
           
-          // Validación de contenido extraído
+          // Si no se pudo extraer contenido (no hay selectores o falló el scraping)
           if (!articleData) {
-            failedDomains.push(result.link);
+            // Nuevo flujo: Verificar relevancia y guardar versión mínima si es relevante
+            const relevance = isRelevantNewsItem(result.title, result.snippet);
+            
+            if (relevance.isRelevant) {
+              // Si la noticia es relevante, guardar versión mínima
+              const minimalArticle = await this.saveMinimalNewsItem(result, relevance);
+              if (minimalArticle) {
+                savedArticles.push({ ...minimalArticle, status: 'minimal' });
+                // Añadir a la lista de artículos minimales
+                minimalArticles.push({
+                  titulo: result.title,
+                  puntuacion: relevance.score,
+                  palabrasClave: relevance.matchedKeywords.join(', '),
+                  fuente: result.source,
+                  url: result.link
+                });
+                logger.info(`💡 Guardado como artículo mínimo: ${result.title} (Score: ${relevance.score})`);
+                logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
+              }
+            } else {
+              // Si no es relevante, registrar como dominio fallido
+              failedDomains.push(result.link);
+              logger.info(`❌ Artículo no relevante (${relevance.score}/100): ${result.title}`);
+            }
             continue;
           }
 
@@ -270,11 +311,114 @@ export default ({ strapi }) => ({
           Dominio: new URL(url).hostname 
         })));
       }
+      
+      // Mostrar todos los enlaces y títulos de artículos scrapeados
+      console.log('=== ARTÍCULOS SCRAPEADOS ===');
+      console.table(savedArticles.map(article => ({
+        Título: article.title,
+        URL: article.sourceUrl,
+        Estado: article.status || 'guardado'
+      })));
+
+      // Mostrar log específico de artículos minimales
+      if (minimalArticles.length > 0) {
+        console.log('\n=== ARTÍCULOS EXTRAÍDOS MINIMALMENTE ===');
+        console.table(minimalArticles);
+        logger.info(`Total de artículos minimales: ${minimalArticles.length}`);
+      } else {
+        logger.info('No se encontraron artículos minimales relevantes');
+      }
+      
+      // Nuevo log de enlaces para facilitar su reutilización
+      if (savedArticles.length > 0) {
+        console.log('\n=== ENLACES DE ARTÍCULOS SCRAPEADOS PARA REUTILIZACIÓN ===');
+        // Ordenar por tipo de artículo y fecha para mejor organización
+        const sortedArticles = [...savedArticles].sort((a, b) => {
+          // Primero ordenar por tipo de artículo (regular, minimal)
+          if ((a.articleType || 'regular') !== (b.articleType || 'regular')) {
+            return (a.articleType || 'regular') === 'regular' ? -1 : 1;
+          }
+          // Luego por fecha, más recientes primero
+          return new Date(b.articleDate || b.publishedAt).getTime() - 
+                 new Date(a.articleDate || a.publishedAt).getTime();
+        });
+        
+        // Formato para copiar y pegar fácilmente
+        console.log('ENLACES_SCRAPEADOS = [');
+        sortedArticles.forEach(article => {
+          const date = article.articleDate || article.publishedAt;
+          const formattedDate = date ? format(new Date(date), 'yyyy-MM-dd') : 'sin-fecha';
+          const articleType = article.articleType || 'regular';
+          const score = article.relevanceScore || 'N/A';
+          console.log(`  '${article.sourceUrl}', // [${formattedDate}] [${articleType}] [score: ${score}] ${article.title.substring(0, 60)}...`);
+        });
+        console.log('];');
+        
+        // Instrucciones para el usuario
+        console.log('\nPuedes copiar estos enlaces y guardarlos en un archivo para excluirlos en futuros scrapes');
+      }
 
       return savedArticles;
     } catch (error) {
       logger.error('Error en el scraping general:', error);
       throw error;
+    }
+  },
+
+  // Nuevo método para guardar noticias mínimas
+  async saveMinimalNewsItem(result: SimpleSearchResult, relevance: RelevanceResult) {
+    try {
+      // Verificar si la URL parece ser específica de un artículo
+      if (!isValidArticleUrl(result.link)) {
+        logger.info(`⚠️ URL no válida para artículo minimal (parece ser una página de categoría/sección): ${result.link}`);
+        return null;
+      }
+      
+      // Procesar la fecha si está disponible
+      let publishedDate = null;
+      if (result.publishedTime) {
+        publishedDate = new Date(result.publishedTime);
+      }
+      
+      // Extraer imagen si está disponible en los metadatos
+      const pagemap = (result as any).pagemap;
+      let mainImage = null;
+      if (pagemap?.cse_image && pagemap.cse_image[0]?.src) {
+        mainImage = pagemap.cse_image[0].src;
+      }
+      
+      // Generar slug a partir del título
+      const slug = result.title.toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+      
+      // Crear la noticia mínima en la base de datos
+      const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+        data: {
+          title: result.title,
+          slug: slug,
+          // Usar el snippet como contenido básico
+          content: `<p>${result.snippet}</p><p><a href="${result.link}" target="_blank">Ver artículo original</a></p>`,
+          summary: result.snippet.length > 150 ? result.snippet.substring(0, 147) + '...' : result.snippet,
+          mainImage: mainImage,
+          sourceUrl: result.link,
+          sourceName: result.source,
+          publishedAt: new Date(),
+          articleDate: publishedDate || new Date(),
+          // Usar "mundo" en lugar de "desconocido" para el país
+          pais: 'mundo',
+          // No conectamos tags porque no tenemos certeza del contenido completo
+          articleType: 'minimal',
+          // Guardar la puntuación de relevancia
+          relevanceScore: relevance.score,
+          publishState: 'published'
+        }
+      });
+      
+      return minimalArticle;
+    } catch (error) {
+      logger.error(`Error guardando artículo mínimo ${result.link}:`, error);
+      return null;
     }
   },
 
@@ -285,16 +429,21 @@ export default ({ strapi }) => ({
   // - Rotación automática de API Keys
   // - Paginación de resultados
   // - Filtros por fecha y sitios específicos
-  async searchNews(searchTerm?: string): Promise<SimpleSearchResult[]> {
+  async searchNews(searchTerm?: string, country?: string): Promise<SimpleSearchResult[]> {
     try {
       logger.info('Iniciando búsqueda de noticias...');
+      
+      if (country) {
+        logger.info(`Filtrando resultados para país: ${country.toUpperCase()}`);
+      }
+      
       const allResults: SimpleSearchResult[] = [];
-      const termsToSearch = searchTerm ? [searchTerm] : SEARCH_CONFIG.searchTerms;
+      const termsToSearch = searchTerm ? [searchTerm] : ["Corredor Bioceanico"];
 
       for (const term of termsToSearch) {
         let start = 1;
-        while (allResults.length < SEARCH_CONFIG.maxArticlesPerTerm) {
-          const results = await getSearchResults(term, start);
+        while (allResults.length < scraperConfig.maxArticlesPerTerm) {
+          const results = await getSearchResults(term, start, country);
           if (!results.length) break;
           
           allResults.push(...results.map(item => ({
@@ -310,12 +459,31 @@ export default ({ strapi }) => ({
         }
       }
 
+      // Filtrado más estricto para eliminar duplicados y ordenar resultados
+      const oneWeekAgo = new Date();
+      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
+      
       return Array.from(new Map(allResults.map(item => [item.link, item])).values())
+        .filter(item => {
+          // Filtrar por fecha cuando está disponible
+          if (item.publishedTime) {
+            const pubDate = new Date(item.publishedTime);
+            return pubDate >= oneWeekAgo;
+          }
+          return true; // Mantener artículos sin fecha
+        })
         .sort((a, b) => {
+          // Priorizar primero artículos con fecha
+          if (a.publishedTime && !b.publishedTime) return -1;
+          if (!a.publishedTime && b.publishedTime) return 1;
+          
+          // Ordenar por fecha más reciente
           if (a.publishedTime && b.publishedTime) {
             return new Date(b.publishedTime).getTime() - new Date(a.publishedTime).getTime();
           }
-          return 0;
+          
+          // Para artículos sin fecha, ordenar alfabéticamente
+          return a.title.localeCompare(b.title);
         });
     } catch (error) {
       logger.error('Error en searchNews:', error);
@@ -348,6 +516,13 @@ export default ({ strapi }) => ({
         return null;
       }
 
+      // Validar el contenido antes de continuar con el procesamiento
+      const validation = isValidContent(content, url);
+      if (!validation.isValid) {
+        logger.error(`❌ Contenido inválido (${url}):`, validation.reasons.join(', '));
+        return null;
+      }
+
       const { content: title } = await extractContent($, selectors.title);
       if (!title || title.trim().length === 0) {
         logger.error('❌ Título vacío:', url);
@@ -368,6 +543,7 @@ export default ({ strapi }) => ({
       logger.info('Resumen:', summary.substring(0, 50) + '...');
       logger.info('Longitud contenido:', content.length);
       logger.info('Imagen:', mainImage ? '✅' : '❌');
+      logger.info('Validación:', validation.isValid ? '✅' : '❌');
 
       return {
         title,
@@ -409,6 +585,101 @@ export default ({ strapi }) => ({
       }
     }
     return tags;
+  },
+
+  /**
+   * Método para ejecutar scraping por lotes en todos los países configurados
+   * @returns Un array con todos los artículos guardados
+   */
+  async batchScrapeByCountry() {
+    try {
+      logger.info('=== INICIANDO SCRAPING POR PAÍSES ===');
+      const allSavedArticles = [];
+      const countries = scraperConfig.optimizedSearchConfig.countries;
+      
+      // Set para almacenar todas las URLs únicas encontradas
+      const allFoundUrls = new Set();
+      
+      // Para cada país configurado
+      for (const country of countries) {
+        logger.info(`Procesando país: ${country.name} (${country.code.toUpperCase()})`);
+        
+        // Seleccionar los términos según idioma del país
+        const terms = scraperConfig.optimizedSearchConfig.terms[country.language];
+        
+        // Para cada término en el idioma adecuado
+        for (const term of terms) {
+          logger.info(`Buscando "${term}" en ${country.name}`);
+          
+          // Ejecutar la búsqueda pero capturar los resultados crudos antes de procesar
+          const rawResults = await this.searchNews(term, country.code);
+          
+          // Almacenar todas las URLs encontradas
+          rawResults.forEach(result => {
+            allFoundUrls.add(result.link);
+          });
+          
+          // Ejecutar búsqueda específica para este término y país
+          const savedArticles = await this.scrapeNews(term, country.code);
+          
+          if (savedArticles.length > 0) {
+            logger.info(`✅ Se guardaron ${savedArticles.length} artículos de ${country.name} con término "${term}"`);
+            allSavedArticles.push(...savedArticles);
+          } else {
+            logger.info(`⚠️ No se encontraron artículos para ${country.name} con término "${term}"`);
+          }
+          
+          // Pausa entre búsquedas para evitar sobrecarga de la API
+          await new Promise(resolve => setTimeout(resolve, 3000));
+        }
+      }
+      
+      // Informe final
+      console.log('=== RESUMEN DE ARTÍCULOS ENCONTRADOS POR PAÍS ===');
+      const summary = scraperConfig.optimizedSearchConfig.countries.map(country => {
+        const countryArticles = allSavedArticles.filter(article => 
+          article.pais?.toLowerCase() === country.name.toLowerCase()
+        );
+        return {
+          País: country.name,
+          Artículos: countryArticles.length,
+          Porcentaje: `${Math.round((countryArticles.length / allSavedArticles.length) * 100)}%`
+        };
+      });
+      
+      console.table(summary);
+      
+      // Mostrar todas las URLs únicas encontradas
+      console.log('=== TODAS LAS URLs ÚNICAS ENCONTRADAS ===');
+      console.log(`Total de URLs únicas: ${allFoundUrls.size}`);
+      
+      // Agrupar URLs por dominio para mejor visualización
+      const domainGroups = {};
+      [...allFoundUrls].forEach(url => {
+        try {
+          const domain = new URL(url).hostname;
+          if (!domainGroups[domain]) {
+            domainGroups[domain] = [];
+          }
+          domainGroups[domain].push(url);
+        } catch (error) {
+          console.error(`URL inválida: ${url}`);
+        }
+      });
+      
+      // Mostrar URLs agrupadas por dominio
+      Object.entries(domainGroups)
+        .sort((a, b) => (b[1] as string[]).length - (a[1] as string[]).length) // Ordenar por cantidad de URLs
+        .forEach(([domain, urls]) => {
+          console.log(`\n📌 ${domain} (${(urls as string[]).length} URLs):`);
+          (urls as string[]).forEach(url => console.log(`   ${url}`));
+        });
+      
+      return allSavedArticles;
+    } catch (error) {
+      logger.error('Error en batchScrapeByCountry:', error);
+      throw error;
+    }
   }
 });
 
@@ -473,29 +744,53 @@ async function generateSummary(content: string, title: string): Promise<string> 
 // 3. Presencia de palabras clave clave
 // 4. Detección de contenido duplicado
 function isValidContent(content: string, url: string): ContentValidationResult {
+  // Sitios oficiales tienen reglas más permisivas
   const isOfficialSite = OFFICIAL_DOMAINS.some(domain => url.includes(domain));
-  
+  console.log(`Validando contenido para ${url} (Sitio oficial: ${isOfficialSite ? 'Sí' : 'No'})`);
+
+  // Para sitios oficiales, solo verificamos que tenga contenido mínimo
   if (isOfficialSite) {
     const hasContent = content.length > 100;
+    if (!hasContent) {
+      console.log(`❌ Sitio oficial con contenido vacío o demasiado corto: ${url}`);
+    } else {
+      console.log(`✅ Sitio oficial con contenido válido: ${url}`);
+    }
     return {
       isValid: hasContent,
-      reasons: hasContent ? [] : ['Contenido vacío']
+      reasons: hasContent ? [] : ['Contenido vacío o demasiado corto para sitio oficial']
     };
   }
 
+  // Para otros sitios, validación completa
   const reasons: string[] = [];
+  const validationPoints: string[] = [];
   
-  if (content.length < 500) reasons.push('Contenido demasiado corto');
+  // Validar longitud mínima
+  if (content.length < 300) {
+    reasons.push('Contenido demasiado corto (menos de 300 caracteres)');
+  } else {
+    validationPoints.push('Longitud mínima OK');
+  }
   
+  // Validar párrafos suficientes
   const paragraphs = content.split(/\n\n|\r\n\r\n|\.(?=\s)/g)
     .filter(p => p.trim().length > 0)
     .filter(p => !p.startsWith('**'));
     
-  if (paragraphs.length < 3) reasons.push('Contenido insuficiente: menos de 3 párrafos');
+  if (paragraphs.length < 2) {
+    reasons.push('Contenido insuficiente: menos de 2 párrafos');
+  } else {
+    validationPoints.push(`Párrafos suficientes (${paragraphs.length})`);
+  }
 
+  // Validar proporción de citas
   const quotesCount = (content.match(/["'"]/g) || []).length;
-  if (quotesCount > content.length * 0.4) reasons.push('Exceso de citas textuales');
+  if (quotesCount > content.length * 0.4) {
+    reasons.push('Exceso de citas textuales');
+  }
 
+  // Validar presencia de palabras clave
   const contentLower = content.toLowerCase();
   const keywordsFound = {
     nombres: CORRIDOR_KEYWORDS.nombres.filter(word => contentLower.includes(word.toLowerCase())),
@@ -503,45 +798,104 @@ function isValidContent(content: string, url: string): ContentValidationResult {
     tags: CORRIDOR_KEYWORDS.temas.filter(word => contentLower.includes(word.toLowerCase()))
   };
 
-  if (keywordsFound.nombres.length < 1) reasons.push('No menciona el corredor específicamente');
-  if (keywordsFound.paises.length < 1) reasons.push('No menciona ningún país involucrado');
-  if (keywordsFound.tags.length < 1) reasons.push('No menciona temas relacionados al corredor');
+  if (keywordsFound.nombres.length < 1) {
+    reasons.push('No menciona el corredor específicamente');
+  } else {
+    validationPoints.push(`Menciona el corredor (${keywordsFound.nombres.join(', ')})`);
+  }
+  
+  if (keywordsFound.paises.length < 1) {
+    reasons.push('No menciona ningún país involucrado');
+  } else {
+    validationPoints.push(`Menciona países (${keywordsFound.paises.join(', ')})`);
+  }
+  
+  if (keywordsFound.tags.length < 1) {
+    reasons.push('No menciona temas relacionados al corredor');
+  } else {
+    validationPoints.push(`Menciona temas relacionados (${keywordsFound.tags.join(', ')})`);
+  }
 
-  return { isValid: reasons.length === 0, reasons };
+  // Decisión final de validez
+  const isValid = reasons.length === 0;
+  
+  // Loguear resultados detallados
+  if (isValid) {
+    console.log(`✅ Contenido válido para ${url}:`);
+    validationPoints.forEach(point => console.log(`  - ${point}`));
+  } else {
+    console.log(`❌ Contenido inválido para ${url}:`);
+    reasons.forEach(reason => console.log(`  - ${reason}`));
+  }
+
+  return { isValid, reasons };
 }
 
-async function getSearchResults(searchTerm: string, start: number = 1): Promise<SearchResult[]> {
+async function getSearchResults(searchTerm: string, start: number = 1, country?: string): Promise<SearchResult[]> {
   const currentKey = API_KEYS[currentKeyIndex];
   
   try {
-    const response = await axiosInstance.get('https://www.googleapis.com/customsearch/v1', {
-      params: {
-        key: currentKey,
-        cx: process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID,
-        q: searchTerm,
-        dateRestrict: `d${SEARCH_CONFIG.batchDays}`,
-        num: 10,
-        start: start,
-        sort: 'date',
-        exactTerms: 'Corredor Bioceánico',
-        dateSort: 'r',
-        filter: '1'
+    console.log(`Realizando búsqueda para: "${searchTerm}" (página ${start/10 + 1})${country ? ` en país: ${country.toUpperCase()}` : ''}`);
+    
+    // Configuración simplificada con solo los parámetros necesarios
+    const params: any = {
+      key: currentKey,
+      cx: process.env.GOOGLE_CUSTOM_SEARCH_ENGINE_ID,
+      q: searchTerm,
+      num: 10,
+      start: start,
+      sort: 'date',
+      dateRestrict: 'd7'
+    };
+    
+    // Añadir restricción de país si está especificada
+    if (country) {
+      const countryMapping: {[key: string]: string} = {
+        'cl': 'countryCL',    // Chile
+        'py': 'countryPY',    // Paraguay
+        'br': 'countryBR',    // Brasil
+        'ar': 'countryAR',    // Argentina
+        'bo': 'countryBO'     // Bolivia
+      };
+      
+      if (countryMapping[country.toLowerCase()]) {
+        params.cr = countryMapping[country.toLowerCase()];
       }
-    });
+    }
+    
+    // Aplicar exclusión de sitios
+    if (scraperConfig.excludedSites) {
+      params.siteSearch = scraperConfig.excludedSites;
+      params.siteSearchFilter = 'e';  // 'e' significa excluir estos sitios
+    }
+    
+    console.log('Parámetros de búsqueda:', JSON.stringify(params));
+    
+    const response = await axiosInstance.get('https://www.googleapis.com/customsearch/v1', { params });
 
     if (response.status === 429 || response.status === 403) {
+      console.log(`Límite de API alcanzado. Rotando a la siguiente clave: ${currentKeyIndex + 1}`);
       currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-      return getSearchResults(searchTerm, start);
+      return getSearchResults(searchTerm, start, country);
+    }
+    
+    if (!response.data || !response.data.items) {
+      return [];
     }
 
-    return response.data.items || [];
+    const items = response.data.items || [];
+    console.log(`Encontrados ${items.length} resultados para "${searchTerm}"`);
+    
+    return items;
   } catch (error) {
     logger.error(`Error en búsqueda: ${error.message}`);
+    
     if (error.response?.status === 429 || error.response?.status === 403) {
       currentKeyIndex = (currentKeyIndex + 1) % API_KEYS.length;
-      return getSearchResults(searchTerm, start);
+      return getSearchResults(searchTerm, start, country);
     }
-    throw error;
+    
+    return [];
   }
 }
 
@@ -555,5 +909,194 @@ async function fetchWithRetry(url: string, maxRetries = 3) {
       await new Promise(resolve => setTimeout(resolve, 2000 * (i + 1)));
     }
   }
+}
+
+/**
+ * Verifica si una URL parece ser una página de artículo específico y no
+ * una página de categoría, sección, autor o página principal
+ * @param url URL a verificar
+ * @returns true si la URL parece ser un artículo específico
+ */
+function isValidArticleUrl(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url);
+    const pathname = parsedUrl.pathname;
+    
+    // Eliminar barras iniciales y finales
+    const path = pathname.replace(/^\/|\/$/g, '');
+    
+    // Si el path está vacío, es la página principal
+    if (path === '') {
+      return false;
+    }
+    
+    // Comprobar si es una URL de categoría o sección común
+    const commonSectionPaths = [
+      'politica', 'política', 'noticias', 'actualidad', 'nacional', 'nacionales',
+      'internacional', 'internacionales', 'economia', 'economía', 'deportes',
+      'sociedad', 'cultura', 'opinion', 'opinión', 'tecnologia', 'tecnología',
+      'ciencia', 'salud', 'educacion', 'educación', 'espectaculos', 'espectáculos',
+      'entretenimiento', 'mundo', 'region', 'regional', 'provinciales', 'locales',
+      'ultimas-noticias', 'ultimas', 'destacadas', 'tendencias', 'virales',
+      'home', 'index', 'inicio', 'portada', 'cover', 'principal', 'main'
+    ];
+    
+    // Verificar si la URL es solo una sección/categoría sin más partes específicas
+    if (commonSectionPaths.includes(path.toLowerCase())) {
+      return false;
+    }
+    
+    // Verificar patrones de URLs de categoría/sección
+    if (/^(category|categoria|seccion|section|tag|autor|author|page|pagina)\/[^\/]+\/?$/.test(path)) {
+      return false;
+    }
+    
+    // Verificar patrones de paginación
+    if (/^page\/\d+\/?$/.test(path) || path.includes('/page/')) {
+      return false;
+    }
+    
+    // URLs que terminan en números de página también suelen ser listados
+    if (/\/\d+\/?$/.test(path) && path.split('/').length < 3) {
+      return false;
+    }
+    
+    // Verificar patrones de URLs de autor
+    if (path.includes('/author/') || path.startsWith('author/')) {
+      return false;
+    }
+    
+    // URLs muy cortas con solo un segmento suelen ser secciones
+    const segments = path.split('/').filter(Boolean);
+    if (segments.length === 1 && segments[0].length < 12 && !segments[0].includes('-')) {
+      return false;
+    }
+    
+    // Características positivas que indican que es un artículo
+    const hasArticleIndicators = 
+      // Tiene fecha en formato YYYY/MM/DD o YYYY-MM-DD
+      /\d{4}\/\d{1,2}\/\d{1,2}/.test(path) || 
+      /\d{4}-\d{1,2}-\d{1,2}/.test(path) ||
+      // Tiene palabras clave de artículo
+      /article|articulo|noticia|nota|news|post|entry/.test(path) ||
+      // Tiene ID numérico de artículo
+      /item\/\d+|id=\d+|article-\d+|post-\d+|noticia\/\d+/.test(url) ||
+      // Tiene slugs largos descriptivos con guiones (típico de artículos)
+      (segments.length > 0 && segments[segments.length-1].includes('-') && segments[segments.length-1].length > 15);
+    
+    // Si tiene algún indicador fuerte de artículo, considerarlo válido
+    if (hasArticleIndicators) {
+      return true;
+    }
+    
+    // Para URLs que no caen en los casos anteriores, verificar si no son muy cortas
+    // y tienen alguna estructura compleja (probabilidad de que sea un artículo)
+    return (segments.length >= 2 || (segments.length === 1 && segments[0].length > 15));
+    
+  } catch (error) {
+    logger.error(`Error analizando URL ${url}:`, error);
+    return false;
+  }
+}
+
+// =============================================
+// SISTEMA DE VERIFICACIÓN DE RELEVANCIA
+// =============================================
+// Función para determinar si una noticia de CSE es relevante para el corredor bioceánico
+function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
+  // Normalizar textos para búsqueda
+  const normalizedTitle = title.toLowerCase();
+  
+  // Criterios de relevancia
+  const matchedKeywords: string[] = [];
+  let score = 0;
+  
+  // NUEVO ENFOQUE: Usar SOLAMENTE el título para determinar relevancia
+  
+  // 1. El título DEBE contener términos clave para ser considerado
+  const titleContainsCorredor = normalizedTitle.includes('corredor');
+  const titleContainsBioceanico = 
+    normalizedTitle.includes('bioceánico') || 
+    normalizedTitle.includes('bioceanico') || 
+    normalizedTitle.includes('bioceânico');
+  const titleContainsRuta = 
+    normalizedTitle.includes('ruta bioceánica') || 
+    normalizedTitle.includes('rota bioceânica');
+  
+  // Si el título no contiene los términos básicos, rechazar inmediatamente
+  if (!(titleContainsCorredor && titleContainsBioceanico) && !titleContainsRuta) {
+    return {
+      isRelevant: false,
+      score: 0,
+      matchedKeywords: []
+    };
+  }
+  
+  // 2. Si el título contiene los términos clave, asignar puntaje base alto
+  score += 50;
+  if (titleContainsCorredor) matchedKeywords.push('corredor');
+  if (titleContainsBioceanico) matchedKeywords.push('bioceánico');
+  if (titleContainsRuta) matchedKeywords.push('ruta bioceánica');
+  
+  // 3. Verificar términos específicos de alto valor en el título
+  const highValueTitleTerms = [
+    'corredor bioceánico vial',
+    'corredor bioceánico capricornio',
+    'corredor bioceanico de capricornio',
+    'corredor bioceânico de capricórnio',
+    'carretera bioceánica',
+    'rota bioceânica'
+  ];
+  
+  for (const term of highValueTitleTerms) {
+    if (normalizedTitle.includes(term)) {
+      matchedKeywords.push(term);
+      score += 30; // Valor adicional por términos específicos en el título
+      break;
+    }
+  }
+  
+  // 4. Verificar si el título menciona países relevantes
+  let countryMatches = 0;
+  for (const country of CORRIDOR_KEYWORDS.paises) {
+    if (normalizedTitle.includes(country.toLowerCase())) {
+      matchedKeywords.push(country);
+      countryMatches++;
+    }
+  }
+  // Valor por mencionar países en el título
+  score += Math.min(countryMatches * 10, 20);
+
+  // 5. Solo después de validar el título, añadir valor adicional por contenido útil en el snippet
+  // Esto no afecta la decisión de rechazar en base al título, solo aumenta la puntuación de noticias ya válidas
+  if (score > 0) {
+    const normalizedSnippet = snippet.toLowerCase();
+    
+    // Verificar si el snippet contiene términos de alto valor
+    const highValueSnippetTerms = [
+      'corredor bioceánico vial',
+      'corredor bioceánico capricornio',
+      'corredor bioceanico de capricornio',
+      'integración regional',
+      'proyecto de infraestructura'
+    ];
+    
+    for (const term of highValueSnippetTerms) {
+      if (normalizedSnippet.includes(term)) {
+        matchedKeywords.push(`snippet: ${term}`);
+        score += 10; // Valor adicional menor por términos en el snippet
+        break;
+      }
+    }
+  }
+  
+  // Verificar si supera el umbral de 60%
+  const isRelevant = score >= 60;
+  
+  return {
+    isRelevant,
+    score,
+    matchedKeywords: Array.from(new Set(matchedKeywords)) // Eliminar duplicados
+  };
 }
 

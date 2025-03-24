@@ -13,6 +13,7 @@ const config = (userConfig: UserConfig) => {
       esbuildOptions: {
         target: 'esnext',
       },
+      exclude: ['HomePage']
     },
   });
 };

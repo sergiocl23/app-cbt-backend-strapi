@@ -84,5 +84,76 @@ module.exports = createCoreController('api::newsletter.newsletter', ({ strapi })
     } catch (error) {
       return ctx.throw(500, error.message);
     }
+  },
+
+  /**
+   * Envío directo de correos sin usar el sistema de cola
+   */
+  async envioDirecto(ctx) {
+    const { type = 'weekly' } = ctx.request.body;
+    
+    console.log('🚀 Iniciando envío directo...');
+    console.log('📝 Request body:', ctx.request.body);
+    
+    try {
+      // Generar contenido del newsletter
+      const content = await strapi.service('api::newsletter.newsletter').generateNewsletterContent(type);
+      
+      // Obtener suscriptores activos
+      const subscribers = await strapi.entityService.findMany('api::subscriber.subscriber', {
+        filters: { isActive: true }
+      });
+      
+      console.log(`📧 Encontrados ${subscribers.length} suscriptores activos`);
+      
+      // Resultados del envío
+      const resultados = {
+        exitos: 0,
+        fallos: 0,
+        detalles: []
+      };
+      
+      // Enviar directamente a cada suscriptor sin usar la cola
+      for (const subscriber of subscribers) {
+        try {
+          // Usamos directamente el método de envío de email que ya existe
+          await strapi.service('api::newsletter.newsletter').sendEmail(subscriber, content);
+          
+          console.log(`✅ Correo enviado con éxito a ${subscriber.email}`);
+          resultados.exitos++;
+          resultados.detalles.push({
+            email: subscriber.email,
+            status: 'success',
+            time: new Date()
+          });
+          
+          // Actualizar la fecha del último newsletter
+          await strapi.service('api::newsletter.newsletter').updateLastNewsletterSent(subscriber.id);
+          
+        } catch (error) {
+          console.error(`❌ Error al enviar correo a ${subscriber.email}:`, error.message);
+          resultados.fallos++;
+          resultados.detalles.push({
+            email: subscriber.email,
+            status: 'failed',
+            error: error.message,
+            time: new Date()
+          });
+        }
+        
+        // Pequeña pausa entre envíos para no saturar el servidor SMTP
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
+      return {
+        success: true,
+        total: subscribers.length,
+        resultados
+      };
+    } catch (error) {
+      console.error('❌ Error en el proceso de envío directo:', error);
+      ctx.throw(500, error.message);
+      return { success: false, error: error.message };
+    }
   }
 })); 
