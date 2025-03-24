@@ -913,6 +913,7 @@ export interface ApiPostPost extends Struct.CollectionTypeSchema {
     body: Schema.Attribute.Text;
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
     post: Schema.Attribute.Relation<'manyToOne', 'api::post.post'>;
+    images: Schema.Attribute.Media<'files' | 'images', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -1087,6 +1088,7 @@ export interface ApiTopicTopic extends Struct.CollectionTypeSchema {
       'api::forum-tag.forum-tag'
     >;
     pinned: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    images: Schema.Attribute.Media<'images' | 'files', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
