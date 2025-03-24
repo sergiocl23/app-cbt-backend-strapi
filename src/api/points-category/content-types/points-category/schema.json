@@ -8,27 +8,28 @@
     "description": ""
   },
   "options": {
-    "draftAndPublish": true
+    "draftAndPublish": false
   },
   "pluginOptions": {},
   "attributes": {
-    "id_category": {
-      "type": "uid"
-    },
     "name": {
       "type": "string"
     },
     "description": {
       "type": "text"
     },
-    "color": {
+    "icon": {
       "type": "string"
     },
     "points": {
       "type": "relation",
-      "relation": "manyToOne",
+      "relation": "manyToMany",
       "target": "api::point.point",
-      "inversedBy": "id_category"
+      "mappedBy": "id_categories"
+    },
+    "icon_size": {
+      "type": "float",
+      "default": 0.025
     }
   }
 }

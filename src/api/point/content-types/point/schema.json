@@ -12,9 +12,6 @@
   },
   "pluginOptions": {},
   "attributes": {
-    "id_point": {
-      "type": "uid"
-    },
     "name": {
       "type": "string"
     },
@@ -22,18 +19,29 @@
       "type": "text"
     },
     "latitude": {
-      "type": "decimal"
+      "type": "float"
     },
     "longitude": {
-      "type": "decimal"
-    },
-    "id_category": {
-      "type": "relation",
-      "relation": "oneToMany",
-      "target": "api::points-category.points-category",
-      "mappedBy": "points"
+      "type": "float"
     },
     "images": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
+      "allowedTypes": [
+        "images",
+        "files",
+        "videos",
+        "audios"
+      ]
+    },
+    "id_categories": {
+      "type": "relation",
+      "relation": "manyToMany",
+      "target": "api::points-category.points-category",
+      "inversedBy": "points"
+    },
+    "main_image": {
       "allowedTypes": [
         "images",
         "files",
@@ -41,7 +49,7 @@
         "audios"
       ],
       "type": "media",
-      "multiple": true
+      "multiple": false
     }
   }
 }
