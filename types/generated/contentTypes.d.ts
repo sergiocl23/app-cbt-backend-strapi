@@ -563,6 +563,46 @@ export interface ApiCompanyCompany extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiEmailQueueEmailQueue extends Struct.CollectionTypeSchema {
+  collectionName: 'email_queues';
+  info: {
+    singularName: 'email-queue';
+    pluralName: 'email-queues';
+    displayName: 'Email Queue';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    status: Schema.Attribute.Enumeration<
+      ['pending', 'processing', 'completed', 'failed']
+    > &
+      Schema.Attribute.DefaultTo<'pending'>;
+    newsletter: Schema.Attribute.Relation<
+      'manyToOne',
+      'api::newsletter.newsletter'
+    >;
+    startTime: Schema.Attribute.DateTime;
+    completedAt: Schema.Attribute.DateTime;
+    totalJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    completedJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    failedJobs: Schema.Attribute.Integer & Schema.Attribute.DefaultTo<0>;
+    jobs: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<
+      'oneToMany',
+      'api::email-queue.email-queue'
+    >;
+  };
+}
+
 export interface ApiForumTagForumTag extends Struct.CollectionTypeSchema {
   collectionName: 'forum_tags';
   info: {
@@ -623,6 +663,36 @@ export interface ApiInterestInterest extends Struct.CollectionTypeSchema {
   };
 }
 
+export interface ApiMetricMetric extends Struct.CollectionTypeSchema {
+  collectionName: 'metrics';
+  info: {
+    singularName: 'metric';
+    pluralName: 'metrics';
+    displayName: 'Metric';
+  };
+  options: {
+    draftAndPublish: false;
+  };
+  attributes: {
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    key: Schema.Attribute.String &
+      Schema.Attribute.Required &
+      Schema.Attribute.Unique;
+    value: Schema.Attribute.Float & Schema.Attribute.DefaultTo<0>;
+    date: Schema.Attribute.Date & Schema.Attribute.Required;
+    metadata: Schema.Attribute.JSON;
+    createdAt: Schema.Attribute.DateTime;
+    updatedAt: Schema.Attribute.DateTime;
+    publishedAt: Schema.Attribute.DateTime;
+    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
+      Schema.Attribute.Private;
+    locale: Schema.Attribute.String;
+    localizations: Schema.Attribute.Relation<'oneToMany', 'api::metric.metric'>;
+  };
+}
+
 export interface ApiNewsletterNewsletter extends Struct.CollectionTypeSchema {
   collectionName: 'newsletters';
   info: {
@@ -671,50 +741,74 @@ export interface ApiNoticiaNoticia extends Struct.CollectionTypeSchema {
     singularName: 'noticia';
     pluralName: 'noticias';
     displayName: 'Noticia';
+    description: '';
   };
   options: {
     draftAndPublish: true;
   };
   attributes: {
-    title: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
+    title: Schema.Attribute.String;
     slug: Schema.Attribute.UID<'title'>;
     content: Schema.Attribute.Text &
-      Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
         maxLength: 1000000;
       }>;
     summary: Schema.Attribute.Text &
-      Schema.Attribute.Required &
       Schema.Attribute.SetMinMaxLength<{
         maxLength: 500;
       }>;
     mainImage: Schema.Attribute.String;
+    featuredImage: Schema.Attribute.Media<
+      | 'images'
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/svg+xml'
+      | 'image/tiff'
+      | 'image/x-icon'
+    >;
+    additionalImages: Schema.Attribute.Media<
+      | 'images'
+      | 'image/jpeg'
+      | 'image/png'
+      | 'image/gif'
+      | 'image/svg+xml'
+      | 'image/tiff'
+      | 'image/x-icon',
+      true
+    > &
+      Schema.Attribute.SetMinMax<
+        {
+          max: 5;
+        },
+        number
+      >;
     author: Schema.Attribute.Relation<
       'manyToOne',
       'plugin::users-permissions.user'
     >;
-    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'> &
-      Schema.Attribute.Configurable;
+    tags: Schema.Attribute.Relation<'manyToMany', 'api::tag.tag'>;
     pais: Schema.Attribute.Enumeration<
       ['chile', 'paraguay', 'brasil', 'argentina', 'mundo']
     > &
-      Schema.Attribute.Required &
       Schema.Attribute.Configurable &
       Schema.Attribute.DefaultTo<'chile'>;
-    sourceUrl: Schema.Attribute.Text &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    sourceName: Schema.Attribute.String & Schema.Attribute.Required;
-    scrapedContent: Schema.Attribute.Text & Schema.Attribute.Private;
-    articleType: Schema.Attribute.Enumeration<
-      ['regular', 'topicFeatured', 'topicSmall']
-    > &
-      Schema.Attribute.Required &
+    sourceUrl: Schema.Attribute.Text;
+    sourceName: Schema.Attribute.String;
+    articleType: Schema.Attribute.Enumeration<['regular', 'minimal']> &
       Schema.Attribute.DefaultTo<'regular'>;
+    relevanceScore: Schema.Attribute.Integer &
+      Schema.Attribute.SetMinMax<
+        {
+          min: 0;
+          max: 100;
+        },
+        number
+      >;
     publishedAt: Schema.Attribute.DateTime;
-    articleDate: Schema.Attribute.DateTime & Schema.Attribute.Required;
+    articleDate: Schema.Attribute.DateTime;
+    manualCreation: Schema.Attribute.Boolean &
+      Schema.Attribute.DefaultTo<false>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
@@ -821,6 +915,7 @@ export interface ApiPostPost extends Struct.CollectionTypeSchema {
     body: Schema.Attribute.Text;
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
     post: Schema.Attribute.Relation<'manyToOne', 'api::post.post'>;
+    images: Schema.Attribute.Media<'files' | 'images', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -937,9 +1032,10 @@ export interface ApiTagTag extends Struct.CollectionTypeSchema {
     singularName: 'tag';
     pluralName: 'tags';
     displayName: 'Tag';
+    description: '';
   };
   options: {
-    draftAndPublish: true;
+    draftAndPublish: false;
   };
   attributes: {
     nombre: Schema.Attribute.String &
@@ -994,6 +1090,7 @@ export interface ApiTopicTopic extends Struct.CollectionTypeSchema {
       'api::forum-tag.forum-tag'
     >;
     pinned: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<false>;
+    images: Schema.Attribute.Media<'images' | 'files', true>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -1383,8 +1480,10 @@ declare module '@strapi/strapi' {
       'plugin::users-permissions.user': PluginUsersPermissionsUser;
       'api::category.category': ApiCategoryCategory;
       'api::company.company': ApiCompanyCompany;
+      'api::email-queue.email-queue': ApiEmailQueueEmailQueue;
       'api::forum-tag.forum-tag': ApiForumTagForumTag;
       'api::interest.interest': ApiInterestInterest;
+      'api::metric.metric': ApiMetricMetric;
       'api::newsletter.newsletter': ApiNewsletterNewsletter;
       'api::noticia.noticia': ApiNoticiaNoticia;
       'api::point.point': ApiPointPoint;

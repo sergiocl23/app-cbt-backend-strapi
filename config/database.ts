@@ -1,6 +1,6 @@
 export default ({ env }) => ({
   connection: {
-    client: 'mysql',
+    client: env('DATABASE_CLIENT', 'mysql'),
     connection: {
       host: env('DATABASE_HOST', 'localhost'),
       port: env.int('DATABASE_PORT', 3307),
@@ -8,18 +8,22 @@ export default ({ env }) => ({
       user: env('DATABASE_USERNAME', 'strapi'),
       password: env('DATABASE_PASSWORD', 'strapi'),
       ssl: env.bool('DATABASE_SSL', false),
-      // charset: 'utf8mb4',
+
+      charset: 'utf8mb4',
+      timezone: '+00:00',
+      connectTimeout: 60000,
     },
     pool: {
       min: 0,
       max: 10,
-      acquireTimeoutMillis: 30000,
-      createTimeoutMillis: 30000,
-      idleTimeoutMillis: 30000,
+      acquireTimeoutMillis: 60000,
+      createTimeoutMillis: 60000,
+      idleTimeoutMillis: 60000,
       reapIntervalMillis: 1000,
       createRetryIntervalMillis: 100,
     },
     debug: false,
+    acquireConnectionTimeout: 60000,
     //debug: env('NODE_ENV') === 'development', para desarrollo
   },
 });
