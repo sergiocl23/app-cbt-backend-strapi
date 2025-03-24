@@ -1,4 +1,35 @@
 /**
+ * =============================================================================
+ * SISTEMA DE NEWSLETTER DEL CORREDOR BIOCEÁNICO
+ * =============================================================================
+ * 
+ * Este servicio maneja la generación y envío de newsletters con noticias
+ * del Corredor Bioceánico. Incluye las siguientes funcionalidades:
+ * 
+ * 1. Obtener noticias publicadas desde la base de datos
+ * 2. Filtrar por tipo (weekly, monthly)
+ * 3. Agrupar por país (Chile, Paraguay, Brasil, Argentina, Mundo)
+ * 4. Generar contenido HTML para envío por email
+ * 5. Crear colas de envío para suscriptores
+ * 6. Procesar el envío con límites de tasa y reintentos
+ * 
+ * CONSIDERACIONES PARA PRODUCCIÓN:
+ * ==============================
+ * 1. URLs de enlaces e imágenes:
+ *    - Configurar PUBLIC_URL en .env con el dominio público real:
+ *      PUBLIC_URL=https://corredorbioceanico.com
+ * 
+ * 2. Permisos públicos en Strapi:
+ *    - La ruta /api/noticias/ver/:id debe ser accesible públicamente
+ *    - Configurar en Settings → Roles → Public
+ * 
+ * 3. Para pruebas en desarrollo:
+ *    - Las imágenes usan placeholders públicos
+ *    - Los enlaces usan localhost (solo accesibles localmente)
+ * 
+ * 4. SMTP:
+ *    - Configurar proveedor SMTP real en .env para producción
+ * 
  * Newsletter Service
  * 
  * Funcionalidades principales:
@@ -48,14 +79,43 @@ const LIMITS = {
 export default ({ strapi }) => ({
   // 1. PERSISTENCIA DE DATOS
   async createEmailQueue(data) {
-    return await strapi.entityService.create('api::email-queue.email-queue', {
-      data: {
-        ...data,
-        startTime: new Date(),
-        completedJobs: 0,
-        failedJobs: 0
+    try {
+      // Verificar si el modelo email-queue existe
+      const modelExists = strapi.db.query('api::email-queue.email-queue') !== undefined;
+      
+      if (!modelExists) {
+        console.log(`⚠️ Modelo api::email-queue.email-queue no encontrado. Usando formato básico.`);
+        // Devolver un objeto simplificado que contenga lo necesario para continuar
+        return {
+          id: Date.now(), // ID temporal
+          subject: data.subject,
+          content: data.content,
+          type: data.type,
+          totalRecipients: data.totalRecipients,
+          queue: { jobs: [] } // Estructura mínima necesaria
+        };
       }
-    });
+      
+      return await strapi.entityService.create('api::email-queue.email-queue', {
+        data: {
+          ...data,
+          startTime: new Date(),
+          completedJobs: 0,
+          failedJobs: 0
+        }
+      });
+    } catch (error) {
+      console.log(`⚠️ Error al crear cola de emails: ${error.message}`);
+      // Devolver un objeto simplificado para continuar
+      return {
+        id: Date.now(), // ID temporal
+        subject: data.subject,
+        content: data.content,
+        type: data.type,
+        totalRecipients: data.totalRecipients,
+        queue: { jobs: [] } // Estructura mínima necesaria
+      };
+    }
   },
 
   async createQueueJob(data) {
@@ -227,19 +287,66 @@ export default ({ strapi }) => ({
 
   async generateNewsletterContent(type = 'weekly') {
     try {
+      console.log('\n📝 Generando contenido del newsletter...');
+      
       const lastDate = this.calculateLastDate(type);
-      const noticiasDelPeriodo = await this.fetchNoticias(lastDate);
-      const noticiasPorPais = this.agruparNoticiasPorPais(noticiasDelPeriodo);
+      let noticiasPublicadas = await this.fetchNoticias(lastDate);
+      
+      if (!Array.isArray(noticiasPublicadas)) {
+        console.log('⚠️ fetchNoticias no devolvió un array válido. Usando array vacío.');
+        noticiasPublicadas = [];
+      }
+      
+      const noticiasValidas = noticiasPublicadas.filter(n => n !== null && n !== undefined);
+      console.log(`📰 Noticias encontradas: ${noticiasValidas.length}`);
+      
+      let noticiasPorPais = {
+        argentina: [],
+        brasil: [],
+        chile: [],
+        paraguay: [],
+        mundo: []
+      };
+      
+      if (noticiasValidas.length > 0) {
+        noticiasPorPais = this.agruparNoticiasPorPais(noticiasValidas);
+      }
+      
       const periodoTexto = this.getPeriodoTexto(type, new Date());
-
+      const subject = `Novedades del Corredor Bioceánico - ${format(new Date(), "d 'de' MMMM", { locale: es })}`;
+      
+      const htmlContent = renderNewsletter(noticiasPorPais, type, periodoTexto);
+      
+      console.log('\n📧 Resumen del newsletter:');
+      console.log(`└── Asunto: ${subject}`);
+      console.log(`└── Total noticias: ${noticiasValidas.length}`);
+      
       return {
-        subject: `Novedades del Corredor Bioceánico - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
-        content: renderNewsletter(noticiasPorPais, type, periodoTexto),
-        noticias: noticiasDelPeriodo.map(n => n.id)
+        subject,
+        content: htmlContent,
+        html: htmlContent,
+        noticias: noticiasValidas.map(n => n.id)
       };
     } catch (error) {
-      console.error('Error generando contenido:', error);
-      throw error;
+      console.error('❌ Error generando contenido:', error);
+      
+      const periodoTexto = this.getPeriodoTexto(type, new Date());
+      const emptyStructure = {
+        argentina: [],
+        brasil: [],
+        chile: [],
+        paraguay: [],
+        mundo: []
+      };
+      
+      const htmlContent = renderNewsletter(emptyStructure, type, periodoTexto);
+      
+      return {
+        subject: `Novedades del Corredor Bioceánico - ${format(new Date(), "d 'de' MMMM", { locale: es })}`,
+        content: htmlContent,
+        html: htmlContent,
+        noticias: []
+      };
     }
   },
 
@@ -265,30 +372,39 @@ export default ({ strapi }) => ({
     console.log('\n🚀 Iniciando proceso de newsletter...');
     console.log('📅 Tipo:', type);
 
-    // Obtener métricas diarias
-    const dailyStats = await this.getDailyMetrics();
-    console.log('\n�� Estadísticas diarias:');
-    console.log(`└── Enviados hoy: ${dailyStats.totalSent}`);
-    console.log(`└── Cuota restante: ${dailyStats.remainingQuota}`);
-    console.log(`└── Próximo reinicio: ${dailyStats.nextReset.toLocaleString()}`);
-
-    // Verificar límites
-    if (dailyStats.remainingQuota <= 0) {
-      throw new Error('Límite diario alcanzado. Próximo reinicio: ' + 
-        dailyStats.nextReset.toLocaleString());
-    }
-
     try {
+      // Obtener métricas diarias
+      const dailyStats = await this.getDailyMetrics();
+      console.log('\n Estadísticas diarias:');
+      console.log(`└── Enviados hoy: ${dailyStats.totalSent}`);
+      console.log(`└── Cuota restante: ${dailyStats.remainingQuota}`);
+      console.log(`└── Próximo reinicio: ${dailyStats.nextReset.toLocaleString()}`);
+
+      // Verificar límites
+      if (dailyStats.remainingQuota <= 0) {
+        throw new Error('Límite diario alcanzado. Próximo reinicio: ' + 
+          dailyStats.nextReset.toLocaleString());
+      }
+
       // Control de límites diarios
       const todaysSentCount = await this.getTodaysSentCount();
       console.log(`📊 Correos enviados hoy: ${todaysSentCount}/${LIMITS.DAILY_LIMIT}`);
 
-      if (todaysSentCount >= LIMITS.DAILY_LIMIT) {
-        console.log('🛑 Límite diario alcanzado');
-        throw new Error(`Límite diario alcanzado (${LIMITS.DAILY_LIMIT})`);
+      // Generar contenido del newsletter
+      const content = await this.generateNewsletterContent(type);
+      
+      if (!content) {
+        console.log('No se generó contenido para el newsletter. Abortando.');
+        return null;
       }
+      
+      // Extraer los datos necesarios
+      const { subject, content: htmlContent, noticias } = content;
+      
+      console.log(`└── Asunto: ${subject}`);
+      console.log(`└── Noticias incluidas: ${noticias.length}`);
 
-      // Obtener suscriptores activos
+      // Buscar suscriptores activos con la frecuencia correcta
       const subscribers = await strapi.entityService.findMany('api::subscriber.subscriber', {
         filters: {
           isActive: true,
@@ -296,131 +412,76 @@ export default ({ strapi }) => ({
         }
       });
 
+      if (!subscribers || subscribers.length === 0) {
+        console.log('⚠️ No se encontraron suscriptores activos para esta frecuencia.');
+        return null;
+      }
+
+      // Filtrar suscriptores según la última fecha de envío
+      const eligibleSubscribers = await this.filterEligibleSubscribers(subscribers, type);
+      
       console.log('\n📧 Resumen de suscriptores:');
       console.log(`└── Total encontrados: ${subscribers.length}`);
+      console.log(`└── Elegibles para envío: ${eligibleSubscribers.length}`);
       console.log(`└── Límite diario: ${LIMITS.DAILY_LIMIT}`);
       console.log(`└── Límite por hora: ${LIMITS.HOURLY_LIMIT}`);
 
-      if (!subscribers.length) {
-        console.log('⚠️ No hay suscriptores activos');
-        return { sent: 0 };
+      if (eligibleSubscribers.length === 0) {
+        console.log('⚠️ No hay suscriptores elegibles para recibir el newsletter en este momento.');
+        return null;
       }
-
-      // Generar contenido
-      console.log('\n📝 Generando contenido del newsletter...');
-      const { subject, content, noticias } = await this.generateNewsletterContent(type);
-      console.log(`└── Asunto: ${subject}`);
-      console.log(`└── Noticias incluidas: ${noticias.length}`);
-
-      // Crear los jobs primero
-      const jobs = this.createJobBatches(subscribers, {
-        subject,
-        html: content,
-        text: content
-      });
-
-      console.log('📦 Jobs creados:', jobs.length);
-
-      // Crear newsletter con datos completos
-      const newsletter = await strapi.entityService.create('api::newsletter.newsletter', {
-        data: {
-          subject,
-          content,
-          type,
-          noticias,
-          sentDate: new Date(),
-          status: 'pending',
-          progress: {
-            totalSubscribers: subscribers.length,
-            sentCount: 0,
-            failedCount: 0,
-            retryCount: 0
-          },
-          queue: {
-            status: 'pending',
-            startTime: new Date(),
-            completedJobs: 0,
-            failedJobs: 0,
-            jobs
-          },
-          publishedAt: new Date()
-        },
-        populate: ['queue', 'queue.jobs', 'progress']
-      });
-
-      console.log('📬 Newsletter creado:', {
-        id: newsletter.id,
-        hasQueue: !!newsletter.queue,
-        jobsCount: newsletter.queue?.jobs?.length
-      });
-
-      // Procesar la cola inmediatamente
+      
       try {
-        console.log(`\n🔄 Procesando newsletter ${newsletter.id}...`);
-
-        // Actualizar estado a processing
-        await strapi.entityService.update('api::newsletter.newsletter', newsletter.id, {
-          data: { status: 'processing' }
+        // Crear cola de envío
+        const newsletterQueue = await this.createEmailQueue({
+          subject: subject,
+          content: htmlContent,
+          type,
+          totalRecipients: eligibleSubscribers.length
+        });
+        
+        console.log('\n📬 Newsletter creado:', {
+          id: newsletterQueue.id,
+          hasQueue: !!newsletterQueue.queue,
+          jobsCount: newsletterQueue.queue?.jobs?.length || 0
         });
 
-        // Procesar cada job
-        for (const job of newsletter.queue.jobs) {
-          console.log(`\n📨 Procesando lote ${job.batchNumber}/${newsletter.queue.jobs.length}`);
-
-          // Procesar suscriptores
-          for (const subscriber of job.subscribers) {
-            try {
-              console.log(`📧 Enviando a: ${subscriber.email}`);
-              await this.sendEmail(subscriber, {
-                subject: newsletter.subject,
-                html: newsletter.content
-              });
-              console.log(`✅ Enviado a: ${subscriber.email}`);
-
-              // Actualizar progreso
-              await strapi.entityService.update('api::newsletter.newsletter', newsletter.id, {
-                data: {
-                  progress: {
-                    ...newsletter.progress,
-                    sentCount: (newsletter.progress?.sentCount || 0) + 1
-                  }
-                }
-              });
-
-            } catch (error) {
-              console.error(`❌ Error enviando a ${subscriber.email}:`, error);
-              continue;
-            }
+        // Verificar si esta es una ejecución de prueba (un solo suscriptor)
+        const isSingleSubscriberTest = eligibleSubscribers.length === 1;
+        
+        if (isSingleSubscriberTest) {
+          console.log('🧪 Detectado envío de prueba a un solo suscriptor');
+          // Enviar directamente sin crear colas complejas
+          const subscriber = eligibleSubscribers[0];
+          const emailContent = {
+            subject: subject,
+            html: htmlContent
+          };
+          
+          const result = await this.sendEmail(subscriber, emailContent);
+          
+          if (result) {
+            console.log(`✅ Correo enviado con éxito a ${subscriber.email}`);
+            await this.updateLastNewsletterSent(subscriber.id);
+            await this.incrementDailyMetric('emailsSent');
+          } else {
+            console.log(`❌ Error al enviar correo a ${subscriber.email}`);
+            await this.incrementDailyMetric('emailsFailed');
           }
+          
+          return { success: result, recipient: subscriber.email };
         }
 
-        // Marcar como completado
-        await strapi.entityService.update('api::newsletter.newsletter', newsletter.id, {
-          data: {
-            status: 'completed',
-            completedDate: new Date()
-          }
-        });
-
-        console.log('✅ Newsletter completado exitosamente');
-
-        return {
-          newsletterId: newsletter.id,
-          status: 'completed',
-          totalSubscribers: subscribers.length
-        };
-
+        // Para múltiples suscriptores, seguir con el proceso normal
+        // Procesar envío a través de la cola
+        return await this.processQueue(newsletterQueue.id);
       } catch (error) {
-        console.error('❌ Error procesando newsletter:', error);
-        await strapi.entityService.update('api::newsletter.newsletter', newsletter.id, {
-          data: { status: 'failed' }
-        });
-        throw error;
+        console.log('❌ Error al crear o procesar cola de newsletter:', error);
+        await this.logError(error);
+        return null;
       }
-
     } catch (error) {
-      console.log('\n❌ Error general:');
-      console.log(`└── ${error.message}`);
+      console.log('❌ Error al enviar newsletter:', error);
       await this.logError(error);
       throw error;
     }
@@ -428,6 +489,7 @@ export default ({ strapi }) => ({
 
   calculateLastDate(type: string) {
     const today = new Date();
+    
     switch(type) {
       case 'monthly':
         today.setMonth(today.getMonth() - 1);
@@ -439,26 +501,95 @@ export default ({ strapi }) => ({
         today.setDate(today.getDate() - 1);
         break;
     }
+    
+    // Establecer la hora a 00:00:00
+    today.setHours(0, 0, 0, 0);
+    
     return today;
   },
 
   async fetchNoticias(lastDate: Date) {
-    console.log('Buscando noticias desde:', lastDate);
-    const noticias = await strapi.entityService.findMany('api::noticia.noticia', {
-      filters: {
-        articleDate: {
-          $gte: lastDate
+    try {
+      // Primer intento con entityService y populate detallado
+      try {
+        const noticias = await strapi.entityService.findMany('api::noticia.noticia', {
+          filters: {
+            publishedAt: {
+              $ne: null
+            }
+          },
+          populate: {
+            featuredImage: true,
+            additionalImages: true,
+            tags: true
+          }
+        });
+        
+        if (noticias && noticias.length > 0) {
+          return noticias;
         }
-      },
-      sort: { articleDate: 'desc' },
-      populate: ['tags']
-    });
-
-    if (noticias.length > 0) {
-      console.log('Primera noticia:', JSON.stringify(noticias[0], null, 2));
+      } catch (error) {
+        console.error('Error con populate avanzado:', error);
+      }
+      
+      // Enfoque alternativo: cargar manualmente las relaciones
+      try {
+        const noticiasBasicas = await strapi.db.query('api::noticia.noticia').findMany({
+          where: { publishedAt: { $ne: null } }
+        });
+        
+        console.log(`📰 Noticias encontradas: ${noticiasBasicas.length}`);
+        
+        // Cargar manualmente las relaciones de archivos
+        const noticiasCompletas = await Promise.all(
+          noticiasBasicas.map(async noticia => {
+            try {
+              const fileRelations = await strapi.db.query('files_related_mph').findMany({
+                where: {
+                  related_id: noticia.id,
+                  related_type: 'api::noticia.noticia'
+                }
+              });
+              
+              if (fileRelations.length > 0) {
+                const fileResults = await Promise.all(
+                  fileRelations.map(async relation => {
+                    try {
+                      const file = await strapi.entityService.findOne('plugin::upload.file', relation.file_id);
+                      return { relation, file };
+                    } catch (fileError) {
+                      return { relation, file: null };
+                    }
+                  })
+                );
+                
+                const files = {};
+                fileResults.forEach(result => {
+                  if (result.file) {
+                    const field = result.relation.field;
+                    files[field] = result.relation.order === 1 ? result.file : [result.file];
+                  }
+                });
+                
+                return { ...noticia, ...files };
+              }
+              return noticia;
+            } catch (relationError) {
+              return noticia;
+            }
+          })
+        );
+        
+        return noticiasCompletas;
+      } catch (manualError) {
+        console.error('Error con carga manual:', manualError);
+      }
+      
+      return [];
+    } catch (error) {
+      console.error('❌ Error al buscar noticias:', error);
+      return [];
     }
-
-    return noticias;
   },
 
   agruparNoticiasPorPais(noticias: Noticia[]): NoticiasPorPais {
@@ -470,12 +601,27 @@ export default ({ strapi }) => ({
       mundo: []
     };
 
+    if (!noticias || noticias.length === 0) {
+      return noticiasPorPais;
+    }
+
     noticias.forEach(noticia => {
-      if (noticiasPorPais.hasOwnProperty(noticia.pais)) {
-        noticiasPorPais[noticia.pais].push(noticia);
+      if (!noticia) return;
+      
+      const paisNormalizado = (noticia.pais || '').toLowerCase().trim();
+      
+      if (paisNormalizado && noticiasPorPais.hasOwnProperty(paisNormalizado)) {
+        noticiasPorPais[paisNormalizado].push(noticia);
       } else {
-        // Si el país no está en nuestras categorías, va a 'mundo'
         noticiasPorPais.mundo.push(noticia);
+      }
+    });
+
+    // Log de distribución
+    console.log('\n📊 Distribución de noticias:');
+    Object.entries(noticiasPorPais).forEach(([pais, noticias]) => {
+      if (noticias.length > 0) {
+        console.log(`└── ${pais}: ${noticias.length}`);
       }
     });
 
@@ -545,45 +691,40 @@ export default ({ strapi }) => ({
   },
 
   async updateJobStatus(job: any, data: any, newsletterId: number) {
-    console.log('📝 Actualizando estado del job:', {
-      newsletterId,
-      jobBatch: job.batchNumber,
-      newStatus: data.status
-    });
-
-    const newsletter = await strapi.entityService.findOne('api::newsletter.newsletter', newsletterId, {
-      populate: ['queue', 'queue.jobs']
-    });
-
-    console.log('📄 Newsletter encontrado:', {
-      id: newsletter?.id,
-      hasQueue: !!newsletter?.queue,
-      jobsCount: newsletter?.queue?.jobs?.length
-    });
-
-    if (!newsletter || !newsletter.queue) {
-      console.error('❌ Newsletter o cola no encontrados');
-      throw new Error(`Newsletter ${newsletterId} o su cola no encontrados`);
-    }
-
-    const updatedJobs = newsletter.queue.jobs.map(queueJob => {
-      if (queueJob.batchNumber === job.batchNumber) {
-        console.log(`✏️ Actualizando job ${queueJob.batchNumber}:`, data);
-        return { ...queueJob, ...data };
-      }
-      return queueJob;
-    });
-
-    console.log('📊 Jobs actualizados:', updatedJobs.length);
-
-    return await strapi.entityService.update('api::newsletter.newsletter', newsletterId, {
-      data: {
-        queue: {
-          ...newsletter.queue,
-          jobs: updatedJobs
+    try {
+      const { status, error } = data;
+      
+      // Actualizar estado del trabajo
+      const updatedJob = await strapi.db.query('newsletter.job').update({
+        where: { id: job.id },
+        data: {
+          status,
+          error: error ? JSON.stringify(error) : null,
+          completedAt: status === 'completed' ? new Date() : null
         }
+      });
+      
+      // Registrar evento
+      let message = `Job #${job.id} actualizado a estado: ${status}`;
+      if (error) {
+        message += ` (con error: ${error.message || 'Error desconocido'})`;
+      } else if (status === 'completed') {
+        message += ` - Newsletter enviado a ${job.subscriber.email} (actualizada fecha de último envío)`;
       }
-    });
+      
+      // Registrar evento en el log
+      await this.logNewsletterEvent(
+        newsletterId,
+        status === 'completed' ? 'info' : (status === 'failed' ? 'error' : 'debug'),
+        message,
+        { jobId: job.id, email: job.subscriber.email }
+      );
+
+      return updatedJob;
+    } catch (error) {
+      console.error('Error al actualizar estado del job:', error);
+      throw error;
+    }
   },
 
   async updateJobProgress(jobId: number, status: string) {
@@ -606,12 +747,62 @@ export default ({ strapi }) => ({
   },
 
   async sendEmail(subscriber: Subscriber, content: EmailContent) {
-    return await strapi.plugins['email'].services.email.send({
-      to: subscriber.email,
-      subject: content.subject,
-      html: content.html,
-      text: content.text
-    });
+    try {
+      const emailOptions = {
+        to: subscriber.email,
+        from: process.env.SMTP_FROM,
+        subject: content.subject,
+        html: content.content || content.html,
+        attachments: [
+          {
+            filename: 'logo.png',
+            path: './public/uploads/LOGO-GORE-TARAPACA-240x112.png',
+            cid: 'logo'
+          },
+          {
+            filename: 'logo_gore.png',
+            path: './public/uploads/LOGO-GORE-TARAPACA-240x112.png',
+            cid: 'logo_gore'
+          }
+        ]
+      };
+
+      // Enviar correo
+      await strapi.plugins['email'].services.email.send(emailOptions);
+      
+      // Actualizar la fecha del último newsletter y métricas
+      await this.updateLastNewsletterSent(subscriber.id);
+      
+      console.log(`✅ Email enviado: ${subscriber.email}`);
+      return true;
+    } catch (error) {
+      console.error(`❌ Error al enviar email a ${subscriber.email}: ${error.message}`);
+      return false;
+    }
+  },
+
+  async updateLastNewsletterSent(subscriberId: number, updateMetrics: boolean = false) {
+    try {
+      const now = new Date();
+      
+      // Actualizar el campo lastNewsletterSent
+      await strapi.db.query('api::subscriber.subscriber').update({
+        where: { id: subscriberId },
+        data: {
+          lastNewsletterSent: now
+        }
+      });
+      
+      // Solo actualizar métricas si se solicita explícitamente
+      if (updateMetrics) {
+        await this.incrementDailyMetric('updateLastNewsletterCount');
+      }
+      
+      return true;
+    } catch (error) {
+      console.error(`❌ Error actualizando newsletter para suscriptor ${subscriberId}:`, error);
+      return false;
+    }
   },
 
   async checkQueueCompletion(queueId: number) {
@@ -716,5 +907,162 @@ export default ({ strapi }) => ({
     });
 
     return dailyStats;
+  },
+
+  /**
+   * Incrementa una métrica diaria específica
+   * @param metricName Nombre de la métrica a incrementar
+   * @param value Valor a incrementar (por defecto 1)
+   */
+  async incrementDailyMetric(metricName: string, value: number = 1) {
+    try {
+      let modelExists = false;
+      try {
+        modelExists = strapi.db.query('api::metric.metric') !== undefined;
+      } catch (e) {
+        console.error(`❌ Error verificando modelo metric: ${e.message}`);
+        return false;
+      }
+      
+      if (!modelExists) {
+        console.error('❌ Modelo metric no encontrado');
+        return false;
+      }
+      
+      const today = new Date().toISOString().split('T')[0];
+      const metricKey = `daily_metrics_${today}`;
+      
+      let metric = await strapi.db.query('api::metric.metric').findOne({
+        where: { key: metricKey }
+      });
+      
+      if (!metric) {
+        try {
+          const initialMetadata = {
+            emailsSent: 0,
+            emailsFailed: 0,
+            subscribersUpdated: 0,
+            updateLastNewsletterCount: 0,
+            lastUpdated: new Date().toISOString()
+          };
+
+          metric = await strapi.entityService.create('api::metric.metric', {
+            data: {
+              name: `Métricas diarias ${today}`,
+              key: metricKey,
+              value: 0,
+              date: today,
+              metadata: initialMetadata
+            }
+          });
+          console.log(`✅ Nuevo registro de métricas creado para ${today}`);
+        } catch (createError) {
+          console.error('❌ Error creando métricas:', createError);
+          return false;
+        }
+      }
+      
+      try {
+        const currentValue = parseFloat(metric.value) || 0;
+        const newValue = currentValue + value;
+        
+        let currentMetadata = {};
+        try {
+          if (typeof metric.metadata === 'string') {
+            currentMetadata = JSON.parse(metric.metadata);
+          } else if (typeof metric.metadata === 'object') {
+            currentMetadata = metric.metadata;
+          }
+        } catch (parseError) {
+          console.error('❌ Error parseando metadatos, reinicializando...');
+          currentMetadata = {
+            emailsSent: 0,
+            emailsFailed: 0,
+            subscribersUpdated: 0,
+            updateLastNewsletterCount: 0
+          };
+        }
+
+        if (typeof currentMetadata[metricName] !== 'number') {
+          currentMetadata[metricName] = 0;
+        }
+
+        const updatedMetadata = {
+          ...currentMetadata,
+          lastUpdated: new Date().toISOString(),
+          [metricName]: (currentMetadata[metricName] || 0) + value
+        };
+        
+        await strapi.entityService.update('api::metric.metric', metric.id, {
+          data: {
+            value: newValue,
+            metadata: updatedMetadata
+          }
+        });
+        
+        console.log(`📊 Métrica ${metricName}: ${currentMetadata[metricName] || 0} → ${updatedMetadata[metricName]}`);
+        return true;
+      } catch (updateError) {
+        console.error('❌ Error actualizando métrica:', updateError.message);
+        return false;
+      }
+    } catch (error) {
+      console.error(`❌ Error en incrementDailyMetric:`, error.message);
+      return false;
+    }
+  },
+
+  /**
+   * Filtra los suscriptores que son elegibles para recibir el newsletter
+   * según su frecuencia y la fecha del último envío
+   * @param subscribers Lista de suscriptores a filtrar
+   * @param type Tipo de newsletter (daily, weekly, monthly)
+   */
+  async filterEligibleSubscribers(subscribers, type = 'weekly') {
+    if (!subscribers || subscribers.length === 0) return [];
+    
+    console.log('Filtrando suscriptores elegibles según fecha del último newsletter...');
+    
+    return subscribers.filter(subscriber => {
+      // Si el suscriptor no tiene fecha de último envío, es elegible
+      if (!subscriber.lastNewsletterSent) {
+        console.log(`  └── Suscriptor ${subscriber.email} nunca ha recibido newsletter, es elegible`);
+        return true;
+      }
+      
+      const lastSent = new Date(subscriber.lastNewsletterSent);
+      const now = new Date();
+      
+      // Calcular diferencia en días
+      const diffInDays = Math.floor((now.getTime() - lastSent.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Determinar elegibilidad según frecuencia
+      let isEligible = false;
+      
+      switch (type) {
+        case 'daily':
+          // Elegible si han pasado al menos 20 horas (casi un día)
+          isEligible = (now.getTime() - lastSent.getTime()) >= (20 * 60 * 60 * 1000);
+          break;
+        case 'weekly':
+          // Elegible si han pasado al menos 6 días
+          isEligible = diffInDays >= 6;
+          break;
+        case 'monthly':
+          // Elegible si han pasado al menos 28 días
+          isEligible = diffInDays >= 28;
+          break;
+        default:
+          isEligible = true;
+      }
+      
+      if (isEligible) {
+        console.log(`  └── Suscriptor ${subscriber.email} elegible (último envío: ${lastSent.toLocaleDateString()})`);
+      } else {
+        console.log(`  ⛔ Suscriptor ${subscriber.email} NO elegible (último envío hace ${diffInDays} días)`);
+      }
+      
+      return isEligible;
+    });
   }
 });

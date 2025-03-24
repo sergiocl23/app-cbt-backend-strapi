@@ -7,8 +7,7 @@ module.exports = {
       path: '/newsletters/test-send',
       handler: 'api::newsletter.newsletter.testSend',
       config: {
-        policies: [],
-        middlewares: []
+        auth: false,
       }
     },
     {
@@ -36,6 +35,21 @@ module.exports = {
       config: {
         policies: [],
         auth: false
+      }
+    },
+    {
+      method: 'POST',
+      path: '/newsletters/envio-directo',
+      handler: 'newsletter.envioDirecto',
+      config: {
+        auth: false,
+        policies: [],
+        description: 'Enviar newsletter directamente sin usar el sistema de cola',
+        tag: {
+          plugin: 'newsletter',
+          name: 'Newsletter',
+          actionType: 'create'
+        }
       }
     }
   ]

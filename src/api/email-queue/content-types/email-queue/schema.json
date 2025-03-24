@@ -1,0 +1,45 @@
+{
+  "kind": "collectionType",
+  "collectionName": "email_queues",
+  "info": {
+    "singularName": "email-queue",
+    "pluralName": "email-queues",
+    "displayName": "Email Queue"
+  },
+  "options": {
+    "draftAndPublish": false
+  },
+  "attributes": {
+    "status": {
+      "type": "enumeration",
+      "enum": ["pending", "processing", "completed", "failed"],
+      "default": "pending"
+    },
+    "newsletter": {
+      "type": "relation",
+      "relation": "manyToOne",
+      "target": "api::newsletter.newsletter"
+    },
+    "startTime": {
+      "type": "datetime"
+    },
+    "completedAt": {
+      "type": "datetime"
+    },
+    "totalJobs": {
+      "type": "integer",
+      "default": 0
+    },
+    "completedJobs": {
+      "type": "integer",
+      "default": 0
+    },
+    "failedJobs": {
+      "type": "integer",
+      "default": 0
+    },
+    "jobs": {
+      "type": "json"
+    }
+  }
+} 
