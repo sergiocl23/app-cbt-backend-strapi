@@ -121,6 +121,22 @@ export default {
       config: {
         auth: false,
       }
+    },
+    {
+      method: 'GET',
+      path: '/noticias/rss-search',
+      handler: 'noticia.findNewsRSS',
+      config: {
+        auth: false,
+      }
+    },
+    {
+      method: 'GET',
+      path: '/noticias/combined-search',
+      handler: 'noticia.findNewsCombined',
+      config: {
+        auth: false,
+      }
     }
   ]
 };

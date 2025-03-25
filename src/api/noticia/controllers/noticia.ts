@@ -2602,5 +2602,522 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
     } catch (error) {
       ctx.throw(500, error);
     }
+  },
+  /**
+   * Endpoint para buscar noticias a través del RSS de Google News
+   */
+  async findNewsRSS(ctx) {
+    try {
+      logger.info('Iniciando búsqueda con RSS de Google News');
+      
+      // Obtener términos de búsqueda de la query, o usar términos predeterminados
+      const searchTerms = typeof ctx.query.terms === 'string'
+        ? ctx.query.terms.split(',').map(t => t.trim())
+        : undefined;
+      
+      // Buscar noticias usando RSS
+      const newsItems = await strapi.service('api::noticia.noticia-scraper').findGoogleNewsRSS(searchTerms);
+      
+      // Agrupar por dominio para análisis
+      const groupedByDomain = {};
+      newsItems.forEach(item => {
+        if (!groupedByDomain[item.sourceDomain]) {
+          groupedByDomain[item.sourceDomain] = [];
+        }
+        groupedByDomain[item.sourceDomain].push(item);
+      });
+      
+      // Convertir a formato para visualización
+      const domainSummary = Object.keys(groupedByDomain).map(domain => ({
+        domain,
+        count: groupedByDomain[domain].length,
+        urls: groupedByDomain[domain].map(item => item.link)
+      }));
+      
+      // Ordenar dominios por cantidad de noticias (más a menos)
+      domainSummary.sort((a, b) => b.count - a.count);
+      
+      // Preparar resumen para vista HTML
+      const summaryHTML = `
+        <h1>Noticias encontradas vía RSS de Google News</h1>
+        <p>Total de noticias encontradas: ${newsItems.length}</p>
+        <p>Fecha de búsqueda: ${new Date().toLocaleString()}</p>
+        
+        <h2>Resumen por dominio</h2>
+        <ul>
+          ${domainSummary.map(domain => `
+            <li>
+              <h3>📌 ${domain.domain} (${domain.count} URLs):</h3>
+              <ul>
+                ${domain.urls.map(url => `<li><a href="${url}" target="_blank">${url}</a></li>`).join('')}
+              </ul>
+            </li>
+          `).join('')}
+        </ul>
+        
+        <h2>Todas las noticias</h2>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Fuente</th>
+            <th>Fecha</th>
+            <th>Enlace</th>
+            <th>Término</th>
+          </tr>
+          ${newsItems.map(item => `
+            <tr>
+              <td>${item.title}</td>
+              <td>${item.sourceName}</td>
+              <td>${item.publishedDate.toLocaleString()}</td>
+              <td><a href="${item.link}" target="_blank">Ver noticia</a></td>
+              <td>${item.searchTerm}</td>
+            </tr>
+          `).join('')}
+        </table>
+      `;
+      
+      // Devolver HTML para visualización en navegador
+      ctx.type = 'text/html';
+      ctx.body = summaryHTML;
+    } catch (error) {
+      logger.error('Error en findNewsRSS:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error al buscar noticias por RSS' };
+    }
+  },
+
+  /**
+   * Método combinado que realiza búsqueda tanto en RSS como en CSE
+   * 1. Primero busca en RSS y guarda artículos completos o mínimos
+   * 2. Luego busca en CSE y elimina duplicados
+   * 3. Extrae y procesa el contenido de los enlaces
+   * 4. Guarda los artículos en la base de datos
+   */
+  async findNewsCombined(ctx) {
+    try {
+      logger.info('=== INICIANDO BÚSQUEDA COMBINADA RSS + CSE ===');
+      
+      // Obtener parámetros
+      const searchTerms = typeof ctx.query.terms === 'string'
+        ? ctx.query.terms.split(',').map(t => t.trim())
+        : ["Corredor Bioceánico", "Corredor Bioceánico Capricornio", "Rota Bioceânica"];
+        
+      const country = ctx.query.country as string;
+      
+      // Estadísticas
+      const stats = {
+        total: { found: 0, processed: 0, saved: 0, savedMinimal: 0, duplicated: 0, failed: 0 },
+        rss: { found: 0, resolved: 0, minimal: 0 },
+        cse: { found: 0, minimal: 0 }
+      };
+      
+      // 1. BÚSQUEDA VÍA RSS
+      logger.info('=== FASE 1: BÚSQUEDA RSS ===');
+      const rssResults = await strapi.service('api::noticia.noticia-scraper').findGoogleNewsRSS(searchTerms);
+      stats.rss.found = rssResults.length;
+      stats.rss.resolved = rssResults.filter(item => item.link && !item.link.includes('news.google.com')).length;
+      stats.rss.minimal = rssResults.filter(item => item.link && item.link.includes('news.google.com')).length;
+      
+      // Guardar enlaces ya procesados
+      const processedUrls = new Map();
+      
+      // Artículos guardados
+      const savedArticles = [];
+      
+      // Procesar resultados RSS
+      logger.info(`Procesando ${rssResults.length} resultados de RSS...`);
+      for (const item of rssResults) {
+        try {
+          stats.total.processed++;
+          
+          // Verificar si ya existe en la base de datos
+          const existingResults = await strapi.entityService.findMany('api::noticia.noticia', {
+            filters: { sourceUrl: item.link }
+          });
+
+          if (existingResults && Array.isArray(existingResults) && existingResults.length > 0) {
+            logger.info(`Artículo ya existe: ${item.link}`);
+            stats.total.duplicated++;
+            continue;
+          }
+          
+          // Marcar como procesado
+          processedUrls.set(item.link, 'rss');
+          
+          // Verificar si es una URL de Google News sin resolver o una URL resuelta
+          const isGoogleNewsUrl = item.link.includes('news.google.com');
+          
+          if (isGoogleNewsUrl) {
+            // CASO 1: URL no resuelta - guardar versión mínima
+            logger.info(`Guardando versión mínima para URL no resuelta: ${item.link}`);
+            
+            // Verificar si el título es relevante
+            const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, '');
+            
+            if (relevance.isRelevant) {
+              // Crear artículo mínimo
+              const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: item.title,
+                  slug: item.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                  summary: item.title.substring(0, 150),
+                  sourceUrl: item.link,
+                  sourceName: item.sourceName || 'Google News',
+                  publishedAt: new Date(),
+                  articleDate: item.publishedDate || new Date(),
+                  pais: 'mundo',
+                  articleType: 'minimal',
+                  relevanceScore: relevance.score
+                }
+              });
+              
+              savedArticles.push(minimalArticle);
+              stats.total.savedMinimal++;
+              stats.total.saved++;
+              logger.info(`⚠️ Artículo mínimo guardado: ${item.title} (Score: ${relevance.score})`);
+              logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
+            } else {
+              logger.info(`❌ Artículo no relevante para el Corredor Bioceánico (Score: ${relevance.score}): ${item.title}`);
+            }
+            
+          } else {
+            // CASO 2: URL resuelta - intentar extraer contenido completo
+            logger.info(`Extrayendo contenido completo para: ${item.link}`);
+            
+            // Extraer datos del artículo
+            const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
+              title: item.title,
+              source: item.sourceName,
+              publishedTime: item.publishedDate
+            });
+            
+            if (articleData) {
+              // Guardar artículo completo
+              // Preparar los tags
+              const tagIds = await strapi.service('api::noticia.noticia-scraper').handleTags(articleData.tags);
+              
+              const savedArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: articleData.title,
+                  slug: articleData.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: articleData.content
+                    .split('\n')
+                    .map(p => p.trim())
+                    .filter(p => p.length > 0)
+                    .map(p => `<p>${p}</p>`)
+                    .join('\n'),
+                  summary: articleData.summary || '',
+                  mainImage: articleData.mainImage || null,
+                  sourceUrl: articleData.sourceUrl,
+                  sourceName: articleData.sourceName,
+                  publishedAt: new Date(),
+                  articleDate: articleData.publishedAt,
+                  pais: articleData.pais,
+                  tags: tagIds,
+                  articleType: 'regular'
+                }
+              });
+              
+              savedArticles.push(savedArticle);
+              stats.total.saved++;
+              logger.info(`✅ Artículo completo guardado: ${articleData.title}`);
+            } else {
+              // Falló la extracción, guardar versión mínima
+              logger.info(`No se pudo extraer contenido, guardando mínimo: ${item.link}`);
+              
+              // Verificar si el título es relevante
+              const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, '');
+              
+              if (relevance.isRelevant) {
+                const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+                  data: {
+                    title: item.title,
+                    slug: item.title.toLowerCase()
+                      .replace(/[^a-z0-9]+/g, '-')
+                      .replace(/^-+|-+$/g, ''),
+                    content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                    summary: item.title.substring(0, 150),
+                    sourceUrl: item.link,
+                    sourceName: item.sourceName || 'Fuente Externa',
+                    publishedAt: new Date(),
+                    articleDate: item.publishedDate || new Date(),
+                    pais: 'mundo',
+                    articleType: 'minimal',
+                    relevanceScore: relevance.score
+                  }
+                });
+                
+                savedArticles.push(minimalArticle);
+                stats.total.savedMinimal++;
+                stats.total.saved++;
+                logger.info(`⚠️ Artículo mínimo guardado (extracción fallida): ${item.title} (Score: ${relevance.score})`);
+                logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
+              } else {
+                logger.info(`❌ Artículo no relevante para el Corredor Bioceánico (Score: ${relevance.score}): ${item.title}`);
+              }
+            }
+          }
+        } catch (error) {
+          logger.error(`Error procesando: ${item.link}`, error);
+          stats.total.failed++;
+        }
+      }
+      
+      // 2. BÚSQUEDA VÍA CSE
+      logger.info('=== FASE 2: BÚSQUEDA CSE ===');
+      let cseResults = [];
+      for (const term of searchTerms) {
+        const termResults = await strapi.service('api::noticia.noticia-scraper').searchNews(term, country);
+        cseResults = [...cseResults, ...termResults];
+      }
+      stats.cse.found = cseResults.length;
+      
+      // Filtrar duplicados entre RSS y CSE
+      const uniqueCseResults = cseResults.filter(item => !processedUrls.has(item.link));
+      logger.info(`CSE: ${uniqueCseResults.length} enlaces únicos de ${cseResults.length} encontrados`);
+      
+      // Procesar resultados CSE
+      logger.info(`Procesando ${uniqueCseResults.length} resultados únicos de CSE...`);
+      for (const item of uniqueCseResults) {
+        try {
+          stats.total.processed++;
+          
+          // Verificar si ya existe en la base de datos
+          const existingResults = await strapi.entityService.findMany('api::noticia.noticia', {
+            filters: { sourceUrl: item.link }
+          });
+
+          if (existingResults && Array.isArray(existingResults) && existingResults.length > 0) {
+            logger.info(`Artículo ya existe: ${item.link}`);
+            stats.total.duplicated++;
+            continue;
+          }
+          
+          // Marcar como procesado
+          processedUrls.set(item.link, 'cse');
+          
+          // Extraer datos del artículo
+          const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
+            title: item.title,
+            source: item.source,
+            publishedTime: item.publishedTime
+          });
+          
+          if (articleData) {
+            // Guardar artículo completo
+            // Preparar los tags
+            const tagIds = await strapi.service('api::noticia.noticia-scraper').handleTags(articleData.tags);
+            
+            const savedArticle = await strapi.entityService.create('api::noticia.noticia', {
+              data: {
+                title: articleData.title,
+                slug: articleData.title.toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, ''),
+                content: articleData.content
+                  .split('\n')
+                  .map(p => p.trim())
+                  .filter(p => p.length > 0)
+                  .map(p => `<p>${p}</p>`)
+                  .join('\n'),
+                summary: articleData.summary || '',
+                mainImage: articleData.mainImage || null,
+                sourceUrl: articleData.sourceUrl,
+                sourceName: articleData.sourceName,
+                publishedAt: new Date(),
+                articleDate: articleData.publishedAt,
+                pais: articleData.pais,
+                tags: tagIds,
+                articleType: 'regular'
+              }
+            });
+            
+            savedArticles.push(savedArticle);
+            stats.total.saved++;
+            logger.info(`✅ Artículo completo guardado (CSE): ${articleData.title}`);
+          } else {
+            // Falló la extracción, guardar versión mínima
+            logger.info(`No se pudo extraer contenido (CSE), guardando mínimo: ${item.link}`);
+            
+            // Verificar si el título es relevante
+            const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, item.snippet || '');
+            
+            if (relevance.isRelevant) {
+              const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: item.title,
+                  slug: item.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: `<p>${item.snippet || item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                  summary: item.snippet ? (item.snippet.length > 150 ? item.snippet.substring(0, 147) + '...' : item.snippet) : item.title.substring(0, 150),
+                  sourceUrl: item.link,
+                  sourceName: item.source,
+                  publishedAt: new Date(),
+                  articleDate: item.publishedTime ? new Date(item.publishedTime) : new Date(),
+                  pais: 'mundo',
+                  articleType: 'minimal',
+                  relevanceScore: relevance.score
+                }
+              });
+              
+              savedArticles.push(minimalArticle);
+              stats.total.savedMinimal++;
+              stats.total.saved++;
+              stats.cse.minimal++;
+              logger.info(`⚠️ Artículo mínimo guardado (CSE, extracción fallida): ${item.title} (Score: ${relevance.score})`);
+              logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
+            } else {
+              logger.info(`❌ Artículo CSE no relevante para el Corredor Bioceánico (Score: ${relevance.score}): ${item.title}`);
+            }
+          }
+        } catch (error) {
+          logger.error(`Error procesando (CSE): ${item.link}`, error);
+          stats.total.failed++;
+        }
+      }
+      
+      // Resumen estadístico
+      logger.info('=== RESULTADOS DE LA BÚSQUEDA COMBINADA ===');
+      logger.info(`Total enlaces encontrados: ${stats.total.found = stats.rss.found + stats.cse.found}`);
+      logger.info(`  - RSS: ${stats.rss.found} (resueltos: ${stats.rss.resolved}, mínimos: ${stats.rss.minimal})`);
+      logger.info(`  - CSE: ${stats.cse.found} (únicos: ${uniqueCseResults.length}, mínimos: ${stats.cse.minimal})`);
+      logger.info(`Artículos procesados: ${stats.total.processed}`);
+      logger.info(`  - Guardados: ${stats.total.saved} (completos: ${stats.total.saved - stats.total.savedMinimal}, mínimos: ${stats.total.savedMinimal})`);
+      logger.info(`  - Duplicados: ${stats.total.duplicated}`);
+      logger.info(`  - Fallidos: ${stats.total.failed}`);
+      
+      // Preparar respuesta
+      const summaryHTML = `
+        <h1>Resultados de búsqueda combinada RSS + CSE</h1>
+        <p>Fecha: ${new Date().toLocaleString()}</p>
+        <p>Términos buscados: ${searchTerms.join(', ')}</p>
+        ${country ? `<p>País: ${country.toUpperCase()}</p>` : ''}
+        
+        <h2>Estadísticas generales</h2>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Fuente</th>
+            <th>Enlaces encontrados</th>
+            <th>Artículos completos</th>
+            <th>Artículos mínimos</th>
+          </tr>
+          <tr>
+            <td>RSS</td>
+            <td>${stats.rss.found}</td>
+            <td>${stats.rss.resolved}</td>
+            <td>${stats.rss.minimal}</td>
+          </tr>
+          <tr>
+            <td>CSE</td>
+            <td>${stats.cse.found}</td>
+            <td>${stats.cse.found - stats.cse.minimal}</td>
+            <td>${stats.cse.minimal}</td>
+          </tr>
+          <tr>
+            <td><strong>TOTAL</strong></td>
+            <td>${stats.total.found}</td>
+            <td>${stats.total.saved - stats.total.savedMinimal}</td>
+            <td>${stats.total.savedMinimal}</td>
+          </tr>
+        </table>
+        
+        <h2>Resultados finales</h2>
+        <ul>
+          <li>Artículos procesados: ${stats.total.processed}</li>
+          <li>Artículos guardados: ${stats.total.saved}</li>
+          <li>Artículos duplicados: ${stats.total.duplicated}</li>
+          <li>Artículos fallidos: ${stats.total.failed}</li>
+        </ul>
+        
+        <h2>Artículos guardados</h2>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Tipo</th>
+            <th>Fuente</th>
+            <th>Enlace</th>
+          </tr>
+          ${savedArticles.map(article => `
+            <tr>
+              <td>${article.title}</td>
+              <td>${article.articleType || 'regular'}</td>
+              <td>${article.sourceName || '-'}</td>
+              <td><a href="${article.sourceUrl}" target="_blank">Ver artículo</a></td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h2>Listado completo de enlaces encontrados</h2>
+        
+        <h3>Enlaces encontrados por RSS (${rssResults.length})</h3>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Fuente</th>
+            <th>Estado</th>
+            <th>URL</th>
+          </tr>
+          ${rssResults.map(item => `
+            <tr>
+              <td>${item.title}</td>
+              <td>${item.sourceName || '-'}</td>
+              <td>${item.link.includes('news.google.com') ? 'No resuelto' : 'Resuelto'}</td>
+              <td><a href="${item.link}" target="_blank">${item.link}</a></td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h3>Enlaces encontrados por CSE (${cseResults.length})</h3>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Fuente</th>
+            <th>URL</th>
+          </tr>
+          ${cseResults.map(item => `
+            <tr>
+              <td>${item.title}</td>
+              <td>${item.source || '-'}</td>
+              <td><a href="${item.link}" target="_blank">${item.link}</a></td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h3>Enlaces en formato para copiar</h3>
+        <h4>Enlaces de RSS:</h4>
+        <pre style="max-height: 300px; overflow: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">
+RSS_LINKS = [
+${rssResults.map(item => `  '${item.link}', // [${item.sourceName || '-'}] ${item.title.substring(0, 50)}...`).join('\n')}
+];
+        </pre>
+        
+        <h4>Enlaces de CSE:</h4>
+        <pre style="max-height: 300px; overflow: auto; background: #f5f5f5; padding: 10px; border: 1px solid #ddd;">
+CSE_LINKS = [
+${cseResults.map(item => `  '${item.link}', // [${item.source || '-'}] ${item.title.substring(0, 50)}...`).join('\n')}
+];
+        </pre>
+      `;
+      
+      // Devolver HTML para visualización en navegador
+      ctx.type = 'text/html';
+      ctx.body = summaryHTML;
+      
+      return {
+        stats,
+        savedArticles
+      };
+      
+    } catch (error) {
+      logger.error('Error en búsqueda combinada:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error en búsqueda combinada' };
+    }
   }
 }))

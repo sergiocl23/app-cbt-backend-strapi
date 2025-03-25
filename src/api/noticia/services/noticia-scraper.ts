@@ -142,6 +142,30 @@ const CORRIDOR_KEYWORDS = {
   ]
 };
 
+// Lista de User-Agents para rotación (diversidad de navegadores y dispositivos)
+const USER_AGENTS = [
+  // Navegadores de escritorio
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/117.0',
+  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0',
+  // Navegadores móviles
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
+  'Mozilla/5.0 (Linux; Android 13; SM-S908B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.0.0 Mobile Safari/537.36',
+  'Mozilla/5.0 (iPad; CPU OS 16_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/118.0.5993.69 Mobile/15E148 Safari/604.1'
+];
+
+// Índice actual para rotación de User-Agents
+let currentUserAgentIndex = 0;
+
+// Obtener el siguiente User-Agent de la lista (rotación)
+function getNextUserAgent() {
+  const userAgent = USER_AGENTS[currentUserAgentIndex];
+  currentUserAgentIndex = (currentUserAgentIndex + 1) % USER_AGENTS.length;
+  return userAgent;
+}
+
 // =============================================
 // INSTANCIAS Y UTILIDADES
 // =============================================
@@ -668,10 +692,10 @@ export default ({ strapi }) => ({
       });
       
       // Mostrar URLs agrupadas por dominio
-      Object.entries(domainGroups)
-        .sort((a, b) => (b[1] as string[]).length - (a[1] as string[]).length) // Ordenar por cantidad de URLs
+      Object.entries(domainGroups as Record<string, any[]>)
+        .sort((a, b) => (b[1] as any[]).length - (a[1] as any[]).length)
         .forEach(([domain, urls]) => {
-          console.log(`\n📌 ${domain} (${(urls as string[]).length} URLs):`);
+          console.log(`\n📌 ${domain} (${(urls as any[]).length} URLs):`);
           (urls as string[]).forEach(url => console.log(`   ${url}`));
         });
       
@@ -679,6 +703,398 @@ export default ({ strapi }) => ({
     } catch (error) {
       logger.error('Error en batchScrapeByCountry:', error);
       throw error;
+    }
+  },
+
+  /**
+   * Busca noticias recientes sobre el Corredor Bioceánico usando RSS de Google News con Puppeteer
+   * @returns Array de noticias encontradas
+   */
+  async findGoogleNewsRSS(searchTerms?: string[]) {
+    try {
+      console.log('=== INICIANDO BÚSQUEDA EN GOOGLE NEWS RSS ===');
+      
+      // Términos de búsqueda por defecto si no se proporcionan, REDUCIDOS a los más importantes
+      const terms = searchTerms || [
+        'Corredor Bioceánico',
+        'Corredor Bioceánico Capricornio',
+        'Rota Bioceânica', 
+      ];
+      
+      const allNewsItems = [];
+      const MAX_ITEMS_PER_TERM = 10; // Limitamos a 10 resultados por término
+      
+      for (const term of terms) {
+        try {
+          console.log(`Buscando noticias RSS para: "${term}"`);
+          
+          // URL del feed RSS de Google News con parámetro de tiempo (7 días)
+          const googleNewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=es&gl=LATAM&ceid=LATAM:es&when:7d`;
+          
+          const response = await axiosInstance.get(googleNewsUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          
+          console.log(`Respuesta recibida para "${term}". Procesando XML...`);
+          
+          // Parsear XML del feed RSS
+          const $ = cheerio.load(response.data, { xmlMode: true });
+          
+          // Enlaces a resolver
+          const googleNewsLinks = [];
+          
+          // Limitar la cantidad de items a procesar
+          $('item').slice(0, MAX_ITEMS_PER_TERM).each((_, item) => {
+            const title = $(item).find('title').text().trim();
+            const link = $(item).find('link').text().trim();
+            const pubDate = new Date($(item).find('pubDate').text().trim());
+            const source = $(item).find('source').text().trim();
+            
+            console.log(`[RSS Item] Título: ${title.substring(0, 50)}... | Enlace: ${link.substring(0, 30)}...`);
+            
+            // Guardar enlace para resolver después
+            googleNewsLinks.push({
+              googleNewsUrl: link,
+              title,
+              pubDate,
+              source,
+              searchTerm: term
+            });
+          });
+          
+          console.log(`Encontrados ${googleNewsLinks.length} enlaces para término "${term}"`);
+          
+          // Resolver URLs con timeouts
+          const resolvedItems = await resolveGoogleNewsLinks(googleNewsLinks);
+          allNewsItems.push(...resolvedItems);
+          
+          // Pausa entre búsquedas de términos
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          
+        } catch (error) {
+          console.error(`Error buscando en Google News RSS para "${term}":`, error.message);
+        }
+      }
+      
+      // Eliminar duplicados por URL
+      const uniqueResults = Array.from(
+        new Map(allNewsItems.map(item => [item.link, item])).values()
+      );
+      
+      // Ordenar por fecha más reciente
+      uniqueResults.sort((a, b) => b.publishedDate.getTime() - a.publishedDate.getTime());
+      
+      console.log(`Total noticias resueltas: ${uniqueResults.length}`);
+      
+      // Agrupar por dominio para análisis
+      const groupedByDomain: Record<string, Array<any>> = {};
+      uniqueResults.forEach(item => {
+        if (!groupedByDomain[item.sourceDomain]) {
+          groupedByDomain[item.sourceDomain] = [];
+        }
+        groupedByDomain[item.sourceDomain].push(item);
+      });
+      
+      console.log('=== RESUMEN POR DOMINIOS ===');
+      Object.entries(groupedByDomain)
+        .sort((a, b) => (b[1] as Array<any>).length - (a[1] as Array<any>).length)
+        .forEach(([domain, items]) => {
+          console.log(`📌 ${domain}: ${(items as Array<any>).length} noticias`);
+        });
+      
+      return uniqueResults;
+    } catch (error) {
+      console.error('Error general en búsqueda RSS:', error);
+      return [];
+    }
+  },
+
+  async findNewsCombined(ctx) {
+    try {
+      console.log('=== INICIANDO BÚSQUEDA COMBINADA RSS + CSE ===');
+      
+      // Obtener parámetros
+      const searchTerms = typeof ctx.query.terms === 'string'
+        ? ctx.query.terms.split(',').map(t => t.trim())
+        : ["Corredor Bioceánico", "Corredor Bioceánico Capricornio", "Rota Bioceânica"];
+        
+      const country = ctx.query.country;
+      
+      // Estadísticas
+      const stats = {
+        total: { found: 0, processed: 0, saved: 0, savedMinimal: 0, duplicated: 0, failed: 0 },
+        rss: { found: 0, resolved: 0, minimal: 0 },
+        cse: { found: 0, minimal: 0 }
+      };
+      
+      // 1. BÚSQUEDA VÍA RSS
+      console.log('=== FASE 1: BÚSQUEDA RSS ===');
+      const rssResults = await strapi.service('api::noticia.noticia-scraper').findGoogleNewsRSS(searchTerms);
+      stats.rss.found = rssResults.length;
+      stats.rss.resolved = rssResults.filter(item => item.link && !item.link.includes('news.google.com')).length;
+      stats.rss.minimal = rssResults.filter(item => item.link && item.link.includes('news.google.com')).length;
+      
+      // Guardar enlaces ya procesados
+      const processedUrls = new Map();
+      
+      // Artículos guardados
+      const savedArticles = [];
+      
+      // Procesar resultados RSS
+      console.log(`Procesando ${rssResults.length} resultados de RSS...`);
+      for (const item of rssResults) {
+        try {
+          stats.total.processed++;
+          
+          // Verificar si ya existe en la base de datos
+          const existing = await strapi.entityService.findMany('api::noticia.noticia', {
+            filters: { sourceUrl: item.link }
+          });
+
+          if (existing.length > 0) {
+            console.log(`Artículo ya existe: ${item.link}`);
+            stats.total.duplicated++;
+            continue;
+          }
+          
+          // Marcar como procesado
+          processedUrls.set(item.link, 'rss');
+          
+          // Verificar si es una URL de Google News sin resolver o una URL resuelta
+          const isGoogleNewsUrl = item.link.includes('news.google.com');
+          
+          if (isGoogleNewsUrl) {
+            // CASO 1: URL no resuelta - guardar versión mínima
+            console.log(`Guardando versión mínima para URL no resuelta: ${item.link}`);
+            
+            // Crear artículo mínimo
+            const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+              data: {
+                title: item.title,
+                slug: item.title.toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, ''),
+                content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                summary: item.title.substring(0, 150),
+                sourceUrl: item.link,
+                sourceName: item.sourceName || 'Google News',
+                publishedAt: new Date(),
+                articleDate: item.publishedDate || new Date(),
+                pais: 'mundo',
+                articleType: 'minimal',
+                publishState: 'published'
+              }
+            });
+            
+            savedArticles.push(minimalArticle);
+            stats.total.savedMinimal++;
+            stats.total.saved++;
+            console.log(`⚠️ Artículo mínimo guardado: ${item.title}`);
+            
+          } else {
+            // CASO 2: URL resuelta - intentar extraer contenido completo
+            console.log(`Extrayendo contenido completo para: ${item.link}`);
+            
+            // Extraer datos del artículo
+            const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
+              title: item.title,
+              source: item.sourceName,
+              publishedTime: item.publishedDate
+            });
+            
+            if (articleData) {
+              // Guardar artículo completo
+              const savedArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: articleData.title,
+                  slug: articleData.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: articleData.content
+                    .split('\n')
+                    .map(p => p.trim())
+                    .filter(p => p.length > 0)
+                    .map(p => `<p>${p}</p>`)
+                    .join('\n'),
+                  summary: articleData.summary || '',
+                  mainImage: articleData.mainImage || null,
+                  sourceUrl: articleData.sourceUrl,
+                  sourceName: articleData.sourceName,
+                  publishedAt: new Date(),
+                  articleDate: articleData.publishedAt,
+                  pais: articleData.pais,
+                  tags: {
+                    connect: await strapi.service('api::noticia.noticia-scraper').handleTags(articleData.tags)
+                  },
+                  articleType: 'regular',
+                  publishState: 'published'
+                }
+              });
+              
+              savedArticles.push(savedArticle);
+              stats.total.saved++;
+              console.log(`✅ Artículo completo guardado: ${articleData.title}`);
+            } else {
+              // Falló la extracción, guardar versión mínima
+              console.log(`No se pudo extraer contenido, guardando mínimo: ${item.link}`);
+              
+              const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: item.title,
+                  slug: item.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                  summary: item.title.substring(0, 150),
+                  sourceUrl: item.link,
+                  sourceName: item.sourceName || 'Fuente Externa',
+                  publishedAt: new Date(),
+                  articleDate: item.publishedDate || new Date(),
+                  pais: 'mundo',
+                  articleType: 'minimal',
+                  publishState: 'published'
+                }
+              });
+              
+              savedArticles.push(minimalArticle);
+              stats.total.savedMinimal++;
+              stats.total.saved++;
+              console.log(`⚠️ Artículo mínimo guardado (extracción fallida): ${item.title}`);
+            }
+          }
+        } catch (error) {
+          console.error(`Error procesando: ${item.link}`, error);
+          stats.total.failed++;
+        }
+      }
+      
+      // 2. BÚSQUEDA VÍA CSE
+      console.log('=== FASE 2: BÚSQUEDA CSE ===');
+      let cseResults = [];
+      for (const term of searchTerms) {
+        const termResults = await strapi.service('api::noticia.noticia-scraper').searchNews(term, country);
+        cseResults = [...cseResults, ...termResults];
+      }
+      stats.cse.found = cseResults.length;
+      
+      // Filtrar duplicados entre RSS y CSE
+      const uniqueCseResults = cseResults.filter(item => !processedUrls.has(item.link));
+      console.log(`CSE: ${uniqueCseResults.length} enlaces únicos de ${cseResults.length} encontrados`);
+      
+      // Procesar resultados CSE
+      console.log(`Procesando ${uniqueCseResults.length} resultados únicos de CSE...`);
+      for (const item of uniqueCseResults) {
+        try {
+          stats.total.processed++;
+          
+          // Verificar si ya existe en la base de datos
+          const existing = await strapi.entityService.findMany('api::noticia.noticia', {
+            filters: { sourceUrl: item.link }
+          });
+
+          if (existing.length > 0) {
+            console.log(`Artículo ya existe: ${item.link}`);
+            stats.total.duplicated++;
+            continue;
+          }
+          
+          // Marcar como procesado
+          processedUrls.set(item.link, 'cse');
+          
+          // Extraer datos del artículo
+          const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
+            title: item.title,
+            source: item.source,
+            publishedTime: item.publishedTime
+          });
+          
+          if (articleData) {
+            // Guardar artículo completo
+            const savedArticle = await strapi.entityService.create('api::noticia.noticia', {
+              data: {
+                title: articleData.title,
+                slug: articleData.title.toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, ''),
+                content: articleData.content
+                  .split('\n')
+                  .map(p => p.trim())
+                  .filter(p => p.length > 0)
+                  .map(p => `<p>${p}</p>`)
+                  .join('\n'),
+                summary: articleData.summary || '',
+                mainImage: articleData.mainImage || null,
+                sourceUrl: articleData.sourceUrl,
+                sourceName: articleData.sourceName,
+                publishedAt: new Date(),
+                articleDate: articleData.publishedAt,
+                pais: articleData.pais,
+                tags: {
+                  connect: await strapi.service('api::noticia.noticia-scraper').handleTags(articleData.tags)
+                },
+                articleType: 'regular',
+                publishState: 'published'
+              }
+            });
+            
+            savedArticles.push(savedArticle);
+            stats.total.saved++;
+            console.log(`✅ Artículo completo guardado (CSE): ${articleData.title}`);
+          } else {
+            // Falló la extracción, guardar versión mínima
+            console.log(`No se pudo extraer contenido (CSE), guardando mínimo: ${item.link}`);
+            
+            const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+              data: {
+                title: item.title,
+                slug: item.title.toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, ''),
+                content: `<p>${item.snippet || item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                summary: item.snippet ? (item.snippet.length > 150 ? item.snippet.substring(0, 147) + '...' : item.snippet) : item.title.substring(0, 150),
+                sourceUrl: item.link,
+                sourceName: item.source,
+                publishedAt: new Date(),
+                articleDate: item.publishedTime ? new Date(item.publishedTime) : new Date(),
+                pais: 'mundo',
+                articleType: 'minimal',
+                publishState: 'published'
+              }
+            });
+            
+            savedArticles.push(minimalArticle);
+            stats.total.savedMinimal++;
+            stats.total.saved++;
+            stats.cse.minimal++;
+            console.log(`⚠️ Artículo mínimo guardado (CSE, extracción fallida): ${item.title}`);
+          }
+        } catch (error) {
+          console.error(`Error procesando (CSE): ${item.link}`, error);
+          stats.total.failed++;
+        }
+      }
+      
+      // Resumen estadístico
+      console.log('=== RESULTADOS DE LA BÚSQUEDA COMBINADA ===');
+      console.log(`Total enlaces encontrados: ${stats.total.found = stats.rss.found + stats.cse.found}`);
+      console.log(`  - RSS: ${stats.rss.found} (resueltos: ${stats.rss.resolved}, mínimos: ${stats.rss.minimal})`);
+      console.log(`  - CSE: ${stats.cse.found} (únicos: ${uniqueCseResults.length}, mínimos: ${stats.cse.minimal})`);
+      console.log(`Artículos procesados: ${stats.total.processed}`);
+      console.log(`  - Guardados: ${stats.total.saved} (completos: ${stats.total.saved - stats.total.savedMinimal}, mínimos: ${stats.total.savedMinimal})`);
+      console.log(`  - Duplicados: ${stats.total.duplicated}`);
+      console.log(`  - Fallidos: ${stats.total.failed}`);
+      
+      return {
+        stats,
+        savedArticles
+      };
+      
+    } catch (error) {
+      console.error('Error en búsqueda combinada:', error);
+      ctx.status = 500;
+      ctx.body = { error: 'Error en búsqueda combinada' };
     }
   }
 });
@@ -1021,10 +1437,41 @@ function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
     normalizedTitle.includes('bioceânico');
   const titleContainsRuta = 
     normalizedTitle.includes('ruta bioceánica') || 
-    normalizedTitle.includes('rota bioceânica');
+    normalizedTitle.includes('rota bioceânica') || 
+    normalizedTitle.includes('carretera bioceánica');
+  const titleContainsCapricornio = 
+    normalizedTitle.includes('capricornio') || 
+    normalizedTitle.includes('capricórnio');
+  const titleContainsIntegracion = 
+    normalizedTitle.includes('integración regional') || 
+    normalizedTitle.includes('integracion regional') ||
+    normalizedTitle.includes('integração regional');
+  
+  // Términos adicionales relevantes
+  const additionalRelevantTerms = [
+    'vial', 
+    'interoceanico', 
+    'interoceánico', 
+    'interoceanica', 
+    'interoceánica',
+    'eixo bioceânico',
+    'carretera interoceánica',
+    'corredor central',
+    'corredor vial',
+    'eje vial',
+    'transoceanico', 
+    'transoceánico'
+  ];
+  
+  const containsAdditionalTerm = additionalRelevantTerms.some(term => normalizedTitle.includes(term));
   
   // Si el título no contiene los términos básicos, rechazar inmediatamente
-  if (!(titleContainsCorredor && titleContainsBioceanico) && !titleContainsRuta) {
+  if (!(
+      (titleContainsCorredor && titleContainsBioceanico) || 
+      titleContainsRuta || 
+      (titleContainsCorredor && titleContainsCapricornio) ||
+      (titleContainsIntegracion && containsAdditionalTerm)
+    )) {
     return {
       isRelevant: false,
       score: 0,
@@ -1037,6 +1484,16 @@ function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
   if (titleContainsCorredor) matchedKeywords.push('corredor');
   if (titleContainsBioceanico) matchedKeywords.push('bioceánico');
   if (titleContainsRuta) matchedKeywords.push('ruta bioceánica');
+  if (titleContainsCapricornio) matchedKeywords.push('capricornio');
+  if (titleContainsIntegracion) matchedKeywords.push('integración regional');
+  
+  if (containsAdditionalTerm) {
+    additionalRelevantTerms.forEach(term => {
+      if (normalizedTitle.includes(term)) {
+        matchedKeywords.push(term);
+      }
+    });
+  }
   
   // 3. Verificar términos específicos de alto valor en el título
   const highValueTitleTerms = [
@@ -1045,7 +1502,21 @@ function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
     'corredor bioceanico de capricornio',
     'corredor bioceânico de capricórnio',
     'carretera bioceánica',
-    'rota bioceânica'
+    'rota bioceânica',
+    'eje vial bioceánico',
+    'puerto murtinho',
+    'carmelo peralta',
+    'complejo multimodal',
+    'puente bioceánico',
+    'túnel de agua negra',
+    'tunel de agua negra',
+    'paso de jama',
+    'puerto de iquique',
+    'puerto de antofagasta',
+    'rodoviario',
+    'rodoviária', 
+    'comercio internacional',
+    'comércio internacional'
   ];
   
   for (const term of highValueTitleTerms) {
@@ -1067,29 +1538,6 @@ function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
   // Valor por mencionar países en el título
   score += Math.min(countryMatches * 10, 20);
 
-  // 5. Solo después de validar el título, añadir valor adicional por contenido útil en el snippet
-  // Esto no afecta la decisión de rechazar en base al título, solo aumenta la puntuación de noticias ya válidas
-  if (score > 0) {
-    const normalizedSnippet = snippet.toLowerCase();
-    
-    // Verificar si el snippet contiene términos de alto valor
-    const highValueSnippetTerms = [
-      'corredor bioceánico vial',
-      'corredor bioceánico capricornio',
-      'corredor bioceanico de capricornio',
-      'integración regional',
-      'proyecto de infraestructura'
-    ];
-    
-    for (const term of highValueSnippetTerms) {
-      if (normalizedSnippet.includes(term)) {
-        matchedKeywords.push(`snippet: ${term}`);
-        score += 10; // Valor adicional menor por términos en el snippet
-        break;
-      }
-    }
-  }
-  
   // Verificar si supera el umbral de 60%
   const isRelevant = score >= 60;
   
@@ -1098,5 +1546,445 @@ function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
     score,
     matchedKeywords: Array.from(new Set(matchedKeywords)) // Eliminar duplicados
   };
+}
+
+// Función auxiliar para extraer la URL real del HTML de Google News
+function extractRealUrlFromGoogleNews(html, originalUrl) {
+  try {
+    // 1. Nueva estrategia: extraer URL del script JSON-LD (muy efectivo)
+    const jsonLdMatch = html.match(/<script type="application\/ld\+json">(.*?)<\/script>/s);
+    if (jsonLdMatch && jsonLdMatch[1]) {
+      try {
+        const jsonData = JSON.parse(jsonLdMatch[1]);
+        if (jsonData.url && jsonData.url !== originalUrl && !jsonData.url.includes('news.google.com')) {
+          console.log('✅ URL encontrada en JSON-LD');
+          return jsonData.url;
+        }
+      } catch (e) {
+        console.log('Error parseando JSON-LD:', e.message);
+      }
+    }
+    
+    // 2. Buscar por data-n-au (método original)
+    const auMatch = html.match(/data-n-au="([^"]+)"/);
+    if (auMatch && auMatch[1]) {
+      return auMatch[1];
+    }
+    
+    // 3. Nueva estrategia: buscar URL en meta canonical
+    const canonicalMatch = html.match(/<link[^>]+?rel=["']canonical["'][^>]+?href=["']([^"']+)["']/i);
+    if (canonicalMatch && canonicalMatch[1] && !canonicalMatch[1].includes('news.google.com')) {
+      console.log('✅ URL encontrada en canonical');
+      return canonicalMatch[1];
+    }
+    
+    // 4. Nueva estrategia: buscar url en meta og:url
+    const ogUrlMatch = html.match(/<meta[^>]+?property=["']og:url["'][^>]+?content=["']([^"']+)["']/i);
+    if (ogUrlMatch && ogUrlMatch[1] && !ogUrlMatch[1].includes('news.google.com')) {
+      console.log('✅ URL encontrada en og:url');
+      return ogUrlMatch[1];
+    }
+    
+    // 5. Buscar en c-wiz con rel="nofollow" (método original mejorado)
+    const cwizMatch = html.match(/c-wiz[^>]*?>[\s\S]*?<a[^>]*?href=["']([^"']+)["'][^>]*?rel=["']nofollow["']/);
+    if (cwizMatch && cwizMatch[1]) {
+      return cwizMatch[1].startsWith('http') 
+        ? cwizMatch[1] 
+        : new URL(cwizMatch[1], 'https://news.google.com').href;
+    }
+    
+    // 6. Buscar cualquier enlace con rel="nofollow" (método original)
+    const relMatch = html.match(/<a[^>]*?href=["']([^"']+)["'][^>]*?rel=["']nofollow["']/);
+    if (relMatch && relMatch[1]) {
+      return relMatch[1].startsWith('http') 
+        ? relMatch[1] 
+        : new URL(relMatch[1], 'https://news.google.com').href;
+    }
+    
+    // 7. Nueva estrategia: seguir redirecciones HTTP para obtener la URL final
+    return null;
+  } catch (error) {
+    console.error('Error extrayendo URL real:', error);
+    return null;
+  }
+}
+
+// Nueva función para seguir redirecciones HTTP y obtener la URL final
+async function followRedirects(url, maxRedirects = 5) {
+  try {
+    console.log(`Siguiendo redirecciones para: ${url}`);
+    
+    // Usar un User-Agent rotado
+    const userAgent = getNextUserAgent();
+    
+    // Configurar Axios para no seguir redirecciones automáticamente
+    const response = await axios.get(url, {
+      maxRedirects: 0,
+      validateStatus: status => (status >= 200 && status < 300) || status === 301 || status === 302 || status === 303 || status === 307 || status === 308,
+      timeout: 7000,
+      headers: {
+        'User-Agent': userAgent,
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+        'Cache-Control': 'no-cache'
+      }
+    });
+    
+    if (response.status >= 300 && response.status < 400 && response.headers.location) {
+      if (maxRedirects <= 0) {
+        console.log('Máximo número de redirecciones alcanzado');
+        return url;
+      }
+      
+      const nextUrl = response.headers.location.startsWith('http')
+        ? response.headers.location
+        : new URL(response.headers.location, url).href;
+      
+      console.log(`Redirección a: ${nextUrl}`);
+      
+      // Pequeña pausa aleatoria entre redirecciones
+      const randomDelay = 200 + Math.floor(Math.random() * 300);
+      await new Promise(resolve => setTimeout(resolve, randomDelay));
+      
+      return await followRedirects(nextUrl, maxRedirects - 1);
+    }
+    
+    return url;
+  } catch (error) {
+    console.error(`Error siguiendo redirecciones: ${error.message}`);
+    return url;
+  }
+}
+
+// Reemplazar la función completa de resolveGoogleNewsLinks
+async function resolveGoogleNewsLinks(links) {
+  const puppeteer = require('puppeteer');
+  const resolvedLinks = [];
+  
+  console.log(`Iniciando resolución de ${links.length} enlaces...`);
+  
+  // Estadísticas de resolución
+  const stats = {
+    totalLinks: links.length,
+    method1Success: 0,
+    method15Success: 0,
+    method2Success: 0,
+    method3Success: 0,
+    failed: 0
+  };
+  
+  // PRIMERA FASE: Intentar resolver URLs directamente con Axios
+  const unresolvedLinks = [];
+  
+  for (const item of links) {
+    try {
+      // Usar un user agent rotado
+      const userAgent = getNextUserAgent();
+      console.log(`Método 1: Intentando resolver ${item.googleNewsUrl.substring(0, 40)}...`);
+      
+      // Intentar obtener la URL real desde el HTML de Google News
+      const response = await axiosInstance.get(item.googleNewsUrl, {
+        headers: {
+          'User-Agent': userAgent,
+          'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8'
+        }
+      });
+      
+      // Intentar extraer URL real del HTML
+      let realUrl = extractRealUrlFromGoogleNews(response.data, item.googleNewsUrl);
+      
+      // Si no se pudo extraer del HTML, intentar seguir redirecciones HTTP
+      if (!realUrl) {
+        console.log('Método 1.5: Intentando seguir redirecciones HTTP...');
+        realUrl = await followRedirects(item.googleNewsUrl);
+        
+        // Solo considerar válida si no es la URL original y no es de Google News
+        if (realUrl === item.googleNewsUrl || realUrl.includes('news.google.com')) {
+          realUrl = null;
+        } else {
+          console.log(`✅ URL resuelta (Método 1.5): ${realUrl}`);
+          stats.method15Success++;
+        }
+      } else {
+        console.log(`✅ URL resuelta (Método 1): ${realUrl}`);
+        stats.method1Success++;
+      }
+      
+      if (realUrl && realUrl !== item.googleNewsUrl) {
+        const domain = new URL(realUrl).hostname;
+        resolvedLinks.push({
+          title: item.title,
+          link: realUrl,
+          originalLink: item.googleNewsUrl,
+          sourceName: item.source || domain,
+          sourceDomain: domain,
+          publishedDate: item.pubDate,
+          searchTerm: item.searchTerm
+        });
+      } else {
+        // MÉTODO 3 (NUEVO): Intentar resolución con otro User-Agent
+        console.log('Método 3: Intentando con otro User-Agent...');
+        const alternativeAgent = getNextUserAgent();
+        
+        try {
+          const altResponse = await axiosInstance.get(item.googleNewsUrl, {
+            headers: {
+              'User-Agent': alternativeAgent,
+              'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+              'Accept-Language': 'pt-BR,pt;q=0.9,en;q=0.8,es;q=0.7', // Otro idioma
+              'Referer': 'https://www.google.com/'
+            },
+            timeout: 8000 
+          });
+          
+          realUrl = extractRealUrlFromGoogleNews(altResponse.data, item.googleNewsUrl);
+          
+          if (realUrl && realUrl !== item.googleNewsUrl && !realUrl.includes('news.google.com')) {
+            console.log(`✅ URL resuelta (Método 3): ${realUrl}`);
+            stats.method3Success++;
+            
+            const domain = new URL(realUrl).hostname;
+            resolvedLinks.push({
+              title: item.title,
+              link: realUrl,
+              originalLink: item.googleNewsUrl,
+              sourceName: item.source || domain,
+              sourceDomain: domain,
+              publishedDate: item.pubDate,
+              searchTerm: item.searchTerm
+            });
+            continue;
+          }
+        } catch (altError) {
+          console.error(`❌ Error método 3: ${altError.message}`);
+        }
+        
+        // No se pudo extraer, usar método 2
+        unresolvedLinks.push(item);
+      }
+    } catch (error) {
+      console.error(`❌ Error método 1: ${error.message}`);
+      unresolvedLinks.push(item);
+    }
+    
+    // Pequeña pausa entre peticiones con tiempo aleatorio
+    const randomDelay = 300 + Math.floor(Math.random() * 500);
+    await new Promise(resolve => setTimeout(resolve, randomDelay));
+  }
+  
+  console.log(`Métodos iniciales completados. Resueltos: ${resolvedLinks.length}/${links.length}. Pendientes: ${unresolvedLinks.length}`);
+  
+  // SEGUNDA FASE: Intentar con Puppeteer para los enlaces no resueltos
+  if (unresolvedLinks.length > 0) {
+    console.log("Iniciando método 2 (Puppeteer) para los enlaces restantes...");
+    
+    try {
+      const browser = await puppeteer.launch({
+        headless: true,
+        args: [
+          '--no-sandbox', 
+          '--disable-setuid-sandbox', 
+          '--disable-gpu',
+          '--disable-web-security',
+          '--disable-features=IsolateOrigins,site-per-process'
+        ],
+        timeout: 30000
+      });
+      
+      // Procesar en grupos pequeños para evitar problemas de memoria
+      const batchSize = 3; // Reducido para mayor estabilidad
+      for (let i = 0; i < unresolvedLinks.length; i += batchSize) {
+        const batch = unresolvedLinks.slice(i, i + batchSize);
+        
+        // Procesamiento SECUENCIAL para mayor estabilidad
+        for (const item of batch) {
+          const page = await browser.newPage();
+          await page.setDefaultNavigationTimeout(20000);
+          
+          // Establecer user agent rotado para cada página
+          await page.setUserAgent(getNextUserAgent());
+          
+          try {
+            console.log(`Método 2: Intentando resolver ${item.googleNewsUrl.substring(0, 40)}...`);
+            
+            // Mejorar detección de redirecciones
+            let finalUrl = null;
+            
+            // Evento para capturar redirecciones
+            await page.setRequestInterception(true);
+            page.on('request', request => {
+              if (request.isNavigationRequest() && request.redirectChain().length) {
+                finalUrl = request.url();
+              }
+              request.continue();
+            });
+            
+            // Navegar a la página y esperar redirecciones
+            await page.goto(item.googleNewsUrl, {
+              waitUntil: 'networkidle2',
+              timeout: 15000
+            });
+            
+            // Esperar por posibles redirecciones JavaScript
+            await new Promise(resolve => setTimeout(resolve, 3000));
+            
+            // Si no se capturó en el evento, obtener la URL final del navegador
+            if (!finalUrl) {
+              finalUrl = page.url();
+            }
+            
+            // Verificar si ya no estamos en Google News
+            if (finalUrl !== item.googleNewsUrl && !finalUrl.includes('news.google.com')) {
+              console.log(`✅ URL resuelta (Método 2): ${finalUrl}`);
+              stats.method2Success++;
+              
+              const domain = new URL(finalUrl).hostname;
+              resolvedLinks.push({
+                title: item.title,
+                link: finalUrl,
+                originalLink: item.googleNewsUrl,
+                sourceName: item.source || domain,
+                sourceDomain: domain,
+                publishedDate: item.pubDate,
+                searchTerm: item.searchTerm
+              });
+            } else {
+              // Intentar extraer la URL del contenido de la página como último recurso
+              let extractedUrl = null;
+              
+              try {
+                // Buscar enlace con atributo data-n-au
+                const articleEl = await page.$('[data-n-au]');
+                if (articleEl) {
+                  extractedUrl = await articleEl.evaluate(el => el.getAttribute('data-n-au'));
+                }
+                
+                // Si no se encontró, buscar enlace canónico
+                if (!extractedUrl) {
+                  const canonicalEl = await page.$('link[rel="canonical"]');
+                  if (canonicalEl) {
+                    const href = await canonicalEl.evaluate(el => el.getAttribute('href'));
+                    if (href && !href.includes('news.google.com')) {
+                      extractedUrl = href;
+                    }
+                  }
+                }
+                
+                // Si aún no hay URL, buscar enlaces específicos de Google News
+                if (!extractedUrl) {
+                  const newsLinkEl = await page.$('.DY5T1d');
+                  if (newsLinkEl) {
+                    extractedUrl = await newsLinkEl.evaluate(el => el.getAttribute('href'));
+                  }
+                }
+              } catch (evalError) {
+                console.error(`Error evaluando elementos DOM: ${evalError.message}`);
+              }
+              
+              // Si aún no hay URL, intentar hacer clic en el primer enlace relevante
+              if (!extractedUrl) {
+                try {
+                  // Encontrar enlaces rel="nofollow"
+                  const noFollowLinks = await page.$$('a[rel="nofollow"]');
+                  if (noFollowLinks.length > 0) {
+                    // Hacer clic en el primer enlace
+                    await noFollowLinks[0].click();
+                    
+                    // Esperar a que se complete la navegación
+                    await new Promise(resolve => setTimeout(resolve, 3000));
+                    
+                    // Obtener URL después del clic
+                    finalUrl = page.url();
+                    if (finalUrl !== item.googleNewsUrl && !finalUrl.includes('news.google.com')) {
+                      extractedUrl = finalUrl;
+                    }
+                  }
+                } catch (clickError) {
+                  console.error(`Error haciendo clic: ${clickError.message}`);
+                }
+              }
+              
+              if (extractedUrl) {
+                // Normalizar URL si es relativa
+                const absoluteUrl = extractedUrl.startsWith('http') 
+                  ? extractedUrl 
+                  : new URL(extractedUrl, 'https://news.google.com').href;
+                
+                console.log(`✅ URL resuelta (Método 2 - DOM): ${absoluteUrl}`);
+                stats.method2Success++;
+                
+                const domain = new URL(absoluteUrl).hostname;
+                resolvedLinks.push({
+                  title: item.title,
+                  link: absoluteUrl,
+                  originalLink: item.googleNewsUrl,
+                  sourceName: item.source || domain,
+                  sourceDomain: domain,
+                  publishedDate: item.pubDate,
+                  searchTerm: item.searchTerm
+                });
+              } else {
+                console.log(`❌ No se pudo resolver: ${item.googleNewsUrl}`);
+                stats.failed++;
+                
+                // Como último recurso, agregar el enlace original para mantener la información
+                resolvedLinks.push({
+                  title: item.title,
+                  link: item.googleNewsUrl, // Mantener el enlace original como fallback
+                  originalLink: item.googleNewsUrl,
+                  sourceName: item.source || 'news.google.com',
+                  sourceDomain: 'news.google.com',
+                  publishedDate: item.pubDate,
+                  searchTerm: item.searchTerm
+                });
+              }
+            }
+          } catch (error) {
+            console.error(`❌ Error método 2: ${error.message}`);
+            stats.failed++;
+            
+            // Agregar el enlace original como fallback
+            resolvedLinks.push({
+              title: item.title,
+              link: item.googleNewsUrl,
+              originalLink: item.googleNewsUrl,
+              sourceName: item.source || 'news.google.com',
+              sourceDomain: 'news.google.com',
+              publishedDate: item.pubDate,
+              searchTerm: item.searchTerm
+            });
+          } finally {
+            // Asegurarse de que la página se cierre adecuadamente
+            try {
+              if (page && !page.isClosed()) {
+                await page.close();
+              }
+            } catch (e) {
+              console.error('Error cerrando página:', e);
+            }
+          }
+          
+          // Pausa entre páginas para estabilidad
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      await browser.close();
+    } catch (browserError) {
+      console.error(`Error iniciando navegador: ${browserError.message}`);
+    }
+  }
+  
+  // Mostrar estadísticas de resolución
+  console.log(`\n=== ESTADÍSTICAS DE RESOLUCIÓN DE ENLACES ===`);
+  console.log(`Total de enlaces procesados: ${stats.totalLinks}`);
+  console.log(`✅ Resueltos por Método 1 (HTML): ${stats.method1Success} (${Math.round(stats.method1Success/stats.totalLinks*100)}%)`);
+  console.log(`✅ Resueltos por Método 1.5 (Redirecciones): ${stats.method15Success} (${Math.round(stats.method15Success/stats.totalLinks*100)}%)`);
+  console.log(`✅ Resueltos por Método 2 (Puppeteer): ${stats.method2Success} (${Math.round(stats.method2Success/stats.totalLinks*100)}%)`);
+  console.log(`✅ Resueltos por Método 3 (Alt User-Agent): ${stats.method3Success} (${Math.round(stats.method3Success/stats.totalLinks*100)}%)`);
+  console.log(`❌ No resueltos: ${stats.failed} (${Math.round(stats.failed/stats.totalLinks*100)}%)`);
+  console.log(`Tasa de éxito total: ${Math.round((stats.method1Success + stats.method15Success + stats.method2Success + stats.method3Success)/stats.totalLinks*100)}%`);
+  
+  return resolvedLinks;
 }
 
