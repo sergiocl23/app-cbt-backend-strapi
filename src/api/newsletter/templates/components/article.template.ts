@@ -112,7 +112,10 @@ export const renderArticle = (noticia: any) => {
     
     // Validar imagen y obtener URL
     const getImageUrl = (noticia: any) => {
-      if (!noticia) return 'cid:logo';
+      const publicUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+      const defaultLogo = `${publicUrl}/uploads/LOGO-GORE-TARAPACA-2.png`;
+      
+      if (!noticia) return defaultLogo;
       
       // 1. Si tiene una URL de imagen principal directa (típica de noticias scrapeadas)
       if (noticia.mainImage) {
@@ -126,8 +129,7 @@ export const renderArticle = (noticia: any) => {
         }
         // Si es una ruta relativa, usamos PUBLIC_URL o localhost
         else if (noticia.mainImage.startsWith('/')) {
-          const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
-          return `${baseUrl}${noticia.mainImage}`;
+          return `${publicUrl}${noticia.mainImage}`;
         }
       }
       
@@ -140,13 +142,12 @@ export const renderArticle = (noticia: any) => {
         }
         // Si es una ruta relativa (/uploads/...)
         else if (url.startsWith('/')) {
-          const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
-          return `${baseUrl}${url}`;
+          return `${publicUrl}${url}`;
         }
       }
       
-      // Si no encontramos una imagen válida, usamos el logo
-      return 'cid:logo';
+      // Si no encontramos una imagen válida, usamos el logo del GORE
+      return defaultLogo;
     };
 
     imageUrl = getImageUrl(noticia);
@@ -162,11 +163,13 @@ export const renderArticle = (noticia: any) => {
       } catch (e) {
         console.error(`La URL de imagen no es válida: ${imageUrl}`, e);
         // Usar la imagen del logo como respaldo
-        imageUrl = 'cid:logo';
+        const publicUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+        imageUrl = `${publicUrl}/uploads/LOGO-GORE-TARAPACA-2.png`;
       }
     } else {
       console.log('No se encontró imagen para este artículo, usando logo como respaldo');
-      imageUrl = 'cid:logo';
+      const publicUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+      imageUrl = `${publicUrl}/uploads/LOGO-GORE-TARAPACA-2.png`;
     }
 
     // Construir URLs completas para enlaces a noticias
