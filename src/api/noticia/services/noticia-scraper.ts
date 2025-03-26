@@ -523,7 +523,7 @@ export default ({ strapi }) => ({
   // 2. Aplica selectores específicos para el dominio
   // 3. Extrae título, contenido, imagen y fecha
   // 4. Genera resumen con IA (Hugging Face)
-  async extractArticleData(url: string, articleData?: SimpleSearchResult) {
+  async extractArticleData(url: string, articleData?: SimpleSearchResult & { skipValidation?: boolean }) {
     try {
       logger.info('=== INICIANDO SCRAPING DE ARTÍCULO ===');
       logger.info('URL:', url);
@@ -541,10 +541,16 @@ export default ({ strapi }) => ({
       }
 
       // Validar el contenido antes de continuar con el procesamiento
-      const validation = isValidContent(content, url);
-      if (!validation.isValid) {
-        logger.error(`❌ Contenido inválido (${url}):`, validation.reasons.join(', '));
-        return null;
+      // Saltamos la validación si skipValidation es true (enlaces de RSS)
+      let validation = { isValid: true, reasons: [] };
+      if (!articleData?.skipValidation) {
+        validation = isValidContent(content, url);
+        if (!validation.isValid) {
+          logger.error(`❌ Contenido inválido (${url}):`, validation.reasons.join(', '));
+          return null;
+        }
+      } else {
+        logger.info('⚠️ Omitiendo validación de contenido para enlace RSS');
       }
 
       const { content: title } = await extractContent($, selectors.title);

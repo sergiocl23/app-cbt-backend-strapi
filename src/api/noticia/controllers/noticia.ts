@@ -2751,47 +2751,40 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
             // CASO 1: URL no resuelta - guardar versión mínima
             logger.info(`Guardando versión mínima para URL no resuelta: ${item.link}`);
             
-            // Verificar si el título es relevante
-            const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, '');
+            // No aplicar filtro de relevancia para RSS
+            // Crear artículo mínimo
+            const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+              data: {
+                title: item.title,
+                slug: item.title.toLowerCase()
+                  .replace(/[^a-z0-9]+/g, '-')
+                  .replace(/^-+|-+$/g, ''),
+                content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                summary: item.title.substring(0, 150),
+                sourceUrl: item.link,
+                sourceName: item.sourceName || 'Google News',
+                publishedAt: new Date(),
+                articleDate: item.publishedDate || new Date(),
+                pais: 'mundo',
+                articleType: 'minimal',
+                relevanceScore: null // No calculamos score de relevancia para RSS
+              }
+            });
             
-            if (relevance.isRelevant) {
-              // Crear artículo mínimo
-              const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
-                data: {
-                  title: item.title,
-                  slug: item.title.toLowerCase()
-                    .replace(/[^a-z0-9]+/g, '-')
-                    .replace(/^-+|-+$/g, ''),
-                  content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
-                  summary: item.title.substring(0, 150),
-                  sourceUrl: item.link,
-                  sourceName: item.sourceName || 'Google News',
-                  publishedAt: new Date(),
-                  articleDate: item.publishedDate || new Date(),
-                  pais: 'mundo',
-                  articleType: 'minimal',
-                  relevanceScore: relevance.score
-                }
-              });
-              
-              savedArticles.push(minimalArticle);
-              stats.total.savedMinimal++;
-              stats.total.saved++;
-              logger.info(`⚠️ Artículo mínimo guardado: ${item.title} (Score: ${relevance.score})`);
-              logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
-            } else {
-              logger.info(`❌ Artículo no relevante para el Corredor Bioceánico (Score: ${relevance.score}): ${item.title}`);
-            }
-            
+            savedArticles.push(minimalArticle);
+            stats.total.savedMinimal++;
+            stats.total.saved++;
+            logger.info(`⚠️ Artículo mínimo guardado (RSS): ${item.title}`);
           } else {
             // CASO 2: URL resuelta - intentar extraer contenido completo
             logger.info(`Extrayendo contenido completo para: ${item.link}`);
             
-            // Extraer datos del artículo
+            // Extraer datos del artículo sin aplicar filtros de validación para RSS
             const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
               title: item.title,
               source: item.sourceName,
-              publishedTime: item.publishedDate
+              publishedTime: item.publishedDate,
+              skipValidation: true // Indicamos que se debe omitir la validación
             });
             
             if (articleData) {
@@ -2830,36 +2823,29 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
               // Falló la extracción, guardar versión mínima
               logger.info(`No se pudo extraer contenido, guardando mínimo: ${item.link}`);
               
-              // Verificar si el título es relevante
-              const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, '');
+              // No verificamos relevancia para RSS, creamos directamente el artículo mínimo
+              const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
+                data: {
+                  title: item.title,
+                  slug: item.title.toLowerCase()
+                    .replace(/[^a-z0-9]+/g, '-')
+                    .replace(/^-+|-+$/g, ''),
+                  content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
+                  summary: item.title.substring(0, 150),
+                  sourceUrl: item.link,
+                  sourceName: item.sourceName || 'Fuente Externa',
+                  publishedAt: new Date(),
+                  articleDate: item.publishedDate || new Date(),
+                  pais: 'mundo',
+                  articleType: 'minimal',
+                  relevanceScore: null // No calculamos score para enlaces RSS
+                }
+              });
               
-              if (relevance.isRelevant) {
-                const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
-                  data: {
-                    title: item.title,
-                    slug: item.title.toLowerCase()
-                      .replace(/[^a-z0-9]+/g, '-')
-                      .replace(/^-+|-+$/g, ''),
-                    content: `<p>${item.title}</p><p><a href="${item.link}" target="_blank">Ver artículo original</a></p>`,
-                    summary: item.title.substring(0, 150),
-                    sourceUrl: item.link,
-                    sourceName: item.sourceName || 'Fuente Externa',
-                    publishedAt: new Date(),
-                    articleDate: item.publishedDate || new Date(),
-                    pais: 'mundo',
-                    articleType: 'minimal',
-                    relevanceScore: relevance.score
-                  }
-                });
-                
-                savedArticles.push(minimalArticle);
-                stats.total.savedMinimal++;
-                stats.total.saved++;
-                logger.info(`⚠️ Artículo mínimo guardado (extracción fallida): ${item.title} (Score: ${relevance.score})`);
-                logger.info(`   Keywords: ${relevance.matchedKeywords.join(', ')}`);
-              } else {
-                logger.info(`❌ Artículo no relevante para el Corredor Bioceánico (Score: ${relevance.score}): ${item.title}`);
-              }
+              savedArticles.push(minimalArticle);
+              stats.total.savedMinimal++;
+              stats.total.saved++;
+              logger.info(`⚠️ Artículo mínimo guardado (RSS, extracción fallida): ${item.title}`);
             }
           }
         } catch (error) {
