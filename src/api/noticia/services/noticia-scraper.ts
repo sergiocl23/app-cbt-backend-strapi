@@ -249,7 +249,7 @@ export default ({ strapi }) => ({
           // Si no se pudo extraer contenido (no hay selectores o falló el scraping)
           if (!articleData) {
             // Nuevo flujo: Verificar relevancia y guardar versión mínima si es relevante
-            const relevance = isRelevantNewsItem(result.title, result.snippet);
+            const relevance = this.isRelevantNewsItem(result.title, result.snippet);
             
             if (relevance.isRelevant) {
               // Si la noticia es relevante, guardar versión mínima
@@ -545,9 +545,9 @@ export default ({ strapi }) => ({
       let validation = { isValid: true, reasons: [] };
       if (!articleData?.skipValidation) {
         validation = isValidContent(content, url);
-        if (!validation.isValid) {
-          logger.error(`❌ Contenido inválido (${url}):`, validation.reasons.join(', '));
-          return null;
+      if (!validation.isValid) {
+        logger.error(`❌ Contenido inválido (${url}):`, validation.reasons.join(', '));
+        return null;
         }
       } else {
         logger.info('⚠️ Omitiendo validación de contenido para enlace RSS');
@@ -1102,6 +1102,210 @@ export default ({ strapi }) => ({
       ctx.status = 500;
       ctx.body = { error: 'Error en búsqueda combinada' };
     }
+  },
+
+  isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
+    // Normalizar textos para búsqueda - mejorar la normalización
+    const normalizedTitle = title.toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, ""); // Eliminar acentos
+    
+    // También analizar el slug/url si está disponible en el título
+    const hasCorredorInUrl = title.includes('/corredor-bioceanico') || 
+                           title.includes('corredor-bioceánico') ||
+                           title.includes('corredor-bioceanico') ||
+                           title.includes('proyecto-del-corredor') ||
+                           title.includes('desarrollo-del-corredor');
+    
+    // Criterios de relevancia
+    const matchedKeywords: string[] = [];
+    let score = 0;
+    
+    // ENFOQUE MEJORADO: Ampliar la detección de términos
+    
+    // 1. Detectar términos clave y sus variantes
+    const titleContainsCorredor = normalizedTitle.includes('corredor');
+    const titleContainsBioceanico = 
+      normalizedTitle.includes('bioceanico') || 
+      normalizedTitle.includes('bioceánico') || 
+      normalizedTitle.includes('bioceânico');
+    const titleContainsProyecto = 
+      normalizedTitle.includes('proyecto del corredor') || 
+      normalizedTitle.includes('proyecto corredor') ||
+      normalizedTitle.includes('desarrollar corredor') ||
+      normalizedTitle.includes('desarrollo del corredor') ||
+      normalizedTitle.includes('desarrollo de corredor');
+    const titleContainsRuta = 
+      normalizedTitle.includes('ruta bioceanica') || 
+      normalizedTitle.includes('rota bioceânica') || 
+      normalizedTitle.includes('carretera bioceánica') ||
+      normalizedTitle.includes('carretera bioceanica');
+    const titleContainsCapricornio = 
+      normalizedTitle.includes('capricornio') || 
+      normalizedTitle.includes('capricórnio');
+    const titleContainsIntegracion = 
+      normalizedTitle.includes('integracion regional') || 
+      normalizedTitle.includes('integración regional') ||
+      normalizedTitle.includes('integração regional');
+    
+    // Verificar términos cercanos (corredor cerca de bioceánico)
+    const closeTerms = normalizedTitle.match(/corredor.{0,15}bioc[ea][aáâ]nic[oa]/i) ||
+                       normalizedTitle.match(/bioc[ea][aáâ]nic[oa].{0,15}corredor/i);
+    
+    // Términos adicionales relevantes
+    const additionalRelevantTerms = [
+      'vial', 
+      'interoceanico', 
+      'interoceánico', 
+      'interoceanica', 
+      'interoceánica',
+      'eixo bioceânico',
+      'carretera interoceánica',
+      'corredor central',
+      'corredor vial',
+      'transoceanico', 
+      'transoceánico',
+      'ruta bioceánica',
+    ];
+    
+    const containsAdditionalTerm = additionalRelevantTerms.some(term => normalizedTitle.includes(term.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+    
+    // Si contiene "corredor bioceánico" en la URL, darle un boost de relevancia
+    if (hasCorredorInUrl) {
+      score += 40;
+      matchedKeywords.push('corredor-bioceánico-en-url');
+    }
+    
+    // CONDICIÓN MEJORADA: Reducir la rigidez para detectar más variantes
+    if (!(
+        (titleContainsCorredor && titleContainsBioceanico) || 
+        titleContainsRuta || 
+        (titleContainsCorredor && titleContainsCapricornio) ||
+        (titleContainsIntegracion && containsAdditionalTerm) ||
+        titleContainsProyecto ||
+        hasCorredorInUrl ||
+        closeTerms
+      )) {
+      // Verificar si al menos menciona países relevantes y términos relacionados
+      const countriesInTitle = CORRIDOR_KEYWORDS.paises.filter(country => 
+        normalizedTitle.includes(country.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+      
+      // Si menciona al menos 3 países del corredor y algún término relacionado, puede ser relevante
+      if (countriesInTitle.length >= 3 && containsAdditionalTerm) {
+        score += 30;
+        matchedKeywords.push(...countriesInTitle);
+        matchedKeywords.push('países-del-corredor');
+      } else {
+        return {
+          isRelevant: false,
+          score: 0,
+          matchedKeywords: []
+        };
+      }
+    }
+    
+    // 2. Si el título contiene los términos clave, asignar puntaje base alto
+    score += 50;
+    if (titleContainsCorredor) matchedKeywords.push('corredor');
+    if (titleContainsBioceanico) matchedKeywords.push('bioceánico');
+    if (titleContainsRuta) matchedKeywords.push('ruta bioceánica');
+    if (titleContainsCapricornio) matchedKeywords.push('capricornio');
+    if (titleContainsIntegracion) matchedKeywords.push('integración regional');
+    if (titleContainsProyecto) matchedKeywords.push('proyecto del corredor');
+    if (closeTerms) matchedKeywords.push('términos bioceánicos cercanos');
+    
+    if (containsAdditionalTerm) {
+      additionalRelevantTerms.forEach(term => {
+        const normalizedTerm = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (normalizedTitle.includes(normalizedTerm)) {
+          matchedKeywords.push(term);
+        }
+      });
+    }
+    
+    // 3. Verificar términos específicos de alto valor en el título
+    const highValueTitleTerms = [
+      'corredor bioceánico vial',
+      'corredor bioceánico capricornio',
+      'corredor bioceanico de capricornio',
+      'corredor bioceânico de capricórnio',
+      'carretera bioceánica',
+      'rota bioceânica',
+      'eje vial bioceánico',
+      'puerto murtinho',
+      'carmelo peralta',
+      'complejo multimodal',
+      'puente bioceánico',
+      'túnel de agua negra',
+      'tunel de agua negra',
+      'paso de jama',
+      'puerto de iquique',
+      'puerto de antofagasta',
+      'rodoviario',
+      'rodoviária', 
+      'comercio internacional',
+      'comércio internacional',
+      'proyecto del corredor bioceánico',
+      'desarrollo del corredor bioceánico',
+      'desarrollo del corredor bioceanico'
+    ];
+    
+    for (const term of highValueTitleTerms) {
+      const normalizedTerm = term.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normalizedTitle.includes(normalizedTerm)) {
+        matchedKeywords.push(term);
+        score += 30; // Valor adicional por términos específicos en el título
+        break;
+      }
+    }
+    
+    // 4. Verificar si el título menciona países relevantes
+    let countryMatches = 0;
+    for (const country of CORRIDOR_KEYWORDS.paises) {
+      const normalizedCountry = country.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      if (normalizedTitle.includes(normalizedCountry)) {
+        matchedKeywords.push(country);
+        countryMatches++;
+      }
+    }
+    
+    // Valor adicional cuando menciona múltiples países conectados por el corredor
+    if (countryMatches >= 2) {
+      score += 25;
+    } else {
+      // Valor por mencionar países en el título
+      score += Math.min(countryMatches * 10, 20);
+    }
+
+    // 5. Verificar contexto adicional en el snippet
+    if (snippet && snippet.length > 10) {
+      const normalizedSnippet = snippet.toLowerCase()
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      // Si el snippet refuerza la relevancia con términos del corredor
+      if (normalizedSnippet.includes('corredor') && 
+          (normalizedSnippet.includes('bioceanico') || normalizedSnippet.includes('bioceánico'))) {
+        score += 15;
+        matchedKeywords.push('corredor-bioceánico-en-snippet');
+      }
+      
+      // Si menciona países del corredor en el snippet
+      const snippetCountries = CORRIDOR_KEYWORDS.paises.filter(country => 
+        normalizedSnippet.includes(country.normalize("NFD").replace(/[\u0300-\u036f]/g, "")));
+      
+      if (snippetCountries.length >= 2) {
+        score += 10;
+        matchedKeywords.push('países-del-corredor-en-snippet');
+      }
+    }
+
+    // Verificar si supera el umbral de 60%
+    const isRelevant = score >= 60;
+    
+    return {
+      isRelevant,
+      score,
+      matchedKeywords: Array.from(new Set(matchedKeywords)) // Eliminar duplicados
+    };
   }
 });
 
@@ -1419,139 +1623,6 @@ function isValidArticleUrl(url: string): boolean {
     logger.error(`Error analizando URL ${url}:`, error);
     return false;
   }
-}
-
-// =============================================
-// SISTEMA DE VERIFICACIÓN DE RELEVANCIA
-// =============================================
-// Función para determinar si una noticia de CSE es relevante para el corredor bioceánico
-function isRelevantNewsItem(title: string, snippet: string): RelevanceResult {
-  // Normalizar textos para búsqueda
-  const normalizedTitle = title.toLowerCase();
-  
-  // Criterios de relevancia
-  const matchedKeywords: string[] = [];
-  let score = 0;
-  
-  // NUEVO ENFOQUE: Usar SOLAMENTE el título para determinar relevancia
-  
-  // 1. El título DEBE contener términos clave para ser considerado
-  const titleContainsCorredor = normalizedTitle.includes('corredor');
-  const titleContainsBioceanico = 
-    normalizedTitle.includes('bioceánico') || 
-    normalizedTitle.includes('bioceanico') || 
-    normalizedTitle.includes('bioceânico');
-  const titleContainsRuta = 
-    normalizedTitle.includes('ruta bioceánica') || 
-    normalizedTitle.includes('rota bioceânica') || 
-    normalizedTitle.includes('carretera bioceánica');
-  const titleContainsCapricornio = 
-    normalizedTitle.includes('capricornio') || 
-    normalizedTitle.includes('capricórnio');
-  const titleContainsIntegracion = 
-    normalizedTitle.includes('integración regional') || 
-    normalizedTitle.includes('integracion regional') ||
-    normalizedTitle.includes('integração regional');
-  
-  // Términos adicionales relevantes
-  const additionalRelevantTerms = [
-    'vial', 
-    'interoceanico', 
-    'interoceánico', 
-    'interoceanica', 
-    'interoceánica',
-    'eixo bioceânico',
-    'carretera interoceánica',
-    'corredor central',
-    'corredor vial',
-    'eje vial',
-    'transoceanico', 
-    'transoceánico'
-  ];
-  
-  const containsAdditionalTerm = additionalRelevantTerms.some(term => normalizedTitle.includes(term));
-  
-  // Si el título no contiene los términos básicos, rechazar inmediatamente
-  if (!(
-      (titleContainsCorredor && titleContainsBioceanico) || 
-      titleContainsRuta || 
-      (titleContainsCorredor && titleContainsCapricornio) ||
-      (titleContainsIntegracion && containsAdditionalTerm)
-    )) {
-    return {
-      isRelevant: false,
-      score: 0,
-      matchedKeywords: []
-    };
-  }
-  
-  // 2. Si el título contiene los términos clave, asignar puntaje base alto
-  score += 50;
-  if (titleContainsCorredor) matchedKeywords.push('corredor');
-  if (titleContainsBioceanico) matchedKeywords.push('bioceánico');
-  if (titleContainsRuta) matchedKeywords.push('ruta bioceánica');
-  if (titleContainsCapricornio) matchedKeywords.push('capricornio');
-  if (titleContainsIntegracion) matchedKeywords.push('integración regional');
-  
-  if (containsAdditionalTerm) {
-    additionalRelevantTerms.forEach(term => {
-      if (normalizedTitle.includes(term)) {
-        matchedKeywords.push(term);
-      }
-    });
-  }
-  
-  // 3. Verificar términos específicos de alto valor en el título
-  const highValueTitleTerms = [
-    'corredor bioceánico vial',
-    'corredor bioceánico capricornio',
-    'corredor bioceanico de capricornio',
-    'corredor bioceânico de capricórnio',
-    'carretera bioceánica',
-    'rota bioceânica',
-    'eje vial bioceánico',
-    'puerto murtinho',
-    'carmelo peralta',
-    'complejo multimodal',
-    'puente bioceánico',
-    'túnel de agua negra',
-    'tunel de agua negra',
-    'paso de jama',
-    'puerto de iquique',
-    'puerto de antofagasta',
-    'rodoviario',
-    'rodoviária', 
-    'comercio internacional',
-    'comércio internacional'
-  ];
-  
-  for (const term of highValueTitleTerms) {
-    if (normalizedTitle.includes(term)) {
-      matchedKeywords.push(term);
-      score += 30; // Valor adicional por términos específicos en el título
-      break;
-    }
-  }
-  
-  // 4. Verificar si el título menciona países relevantes
-  let countryMatches = 0;
-  for (const country of CORRIDOR_KEYWORDS.paises) {
-    if (normalizedTitle.includes(country.toLowerCase())) {
-      matchedKeywords.push(country);
-      countryMatches++;
-    }
-  }
-  // Valor por mencionar países en el título
-  score += Math.min(countryMatches * 10, 20);
-
-  // Verificar si supera el umbral de 60%
-  const isRelevant = score >= 60;
-  
-  return {
-    isRelevant,
-    score,
-    matchedKeywords: Array.from(new Set(matchedKeywords)) // Eliminar duplicados
-  };
 }
 
 // Función auxiliar para extraer la URL real del HTML de Google News

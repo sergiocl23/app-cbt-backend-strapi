@@ -751,6 +751,35 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
               color: #999;
             }
             
+            .source-url {
+              margin: 15px 0;
+            }
+            
+            .source-link {
+              display: inline-block;
+              background-color: #3498db;
+              color: white;
+              padding: 8px 16px;
+              border-radius: 5px;
+              text-decoration: none;
+              font-weight: bold;
+              transition: background-color 0.3s ease;
+            }
+            
+            .source-link:hover {
+              background-color: #2980b9;
+            }
+            
+            .image-url {
+              margin-top: 5px;
+              font-size: 12px;
+              color: #666;
+              background-color: #f5f5f5;
+              padding: 5px 8px;
+              border-radius: 4px;
+              word-break: break-all;
+            }
+            
             h3 {
               margin-top: 0;
               color: #2c3e50;
@@ -888,13 +917,23 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                       ${noticia.publishedAt 
                         ? `<div>Publicada: ${new Date(noticia.publishedAt).toLocaleString('es-ES')}</div>` 
                         : ''}
+                      ${noticia.articleType 
+                        ? `<div>Tipo: ${noticia.articleType}</div>` 
+                        : ''}
                     </div>
                     ${noticia.summary ? `<p>${noticia.summary}</p>` : ''}
+                    ${noticia.sourceUrl 
+                      ? `<div class="source-url">
+                          <a href="${noticia.sourceUrl}" target="_blank" class="source-link">
+                            Ver noticia original (${noticia.sourceName || 'Fuente externa'})
+                          </a>
+                         </div>` 
+                      : ''}
                     ${noticia.tags && noticia.tags.length > 0 
                       ? `
                         <div class="tag-list">
                           ${noticia.tags.map((tag: any) => `
-                            <span class="tag-item">${tag.name || tag.id}</span>
+                            <span class="tag-item">${tag.nombre || tag.name || tag.id}</span>
                           `).join('')}
                         </div>
                       ` 
@@ -904,6 +943,16 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                         <div>
                           <h4>Imagen Destacada:</h4>
                           <img src="${noticia.featuredImage.url}" alt="${noticia.title}" class="news-image">
+                          <div class="image-url">URL: ${noticia.featuredImage.url}</div>
+                        </div>
+                      ` 
+                      : ''}
+                    ${noticia.mainImage 
+                      ? `
+                        <div>
+                          <h4>Imagen Principal:</h4>
+                          <img src="${noticia.mainImage}" alt="${noticia.title}" class="news-image">
+                          <div class="image-url">URL: ${noticia.mainImage}</div>
                         </div>
                       ` 
                       : ''}
@@ -2934,6 +2983,16 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
             const relevance = strapi.service('api::noticia.noticia-scraper').isRelevantNewsItem(item.title, item.snippet || '');
             
             if (relevance.isRelevant) {
+              // Extraer imagen del pagemap si está disponible
+              let mainImage = null;
+              if (item.pagemap?.cse_image?.[0]?.src) {
+                mainImage = item.pagemap.cse_image[0].src;
+              } else if (item.pagemap?.metatags?.[0]?.['og:image']) {
+                mainImage = item.pagemap.metatags[0]['og:image'];
+              } else if (item.pagemap?.metatags?.[0]?.['twitter:image']) {
+                mainImage = item.pagemap.metatags[0]['twitter:image'];
+              }
+
               const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
                 data: {
                   title: item.title,
@@ -2948,6 +3007,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                   articleDate: item.publishedTime ? new Date(item.publishedTime) : new Date(),
                   pais: 'mundo',
                   articleType: 'minimal',
+                  mainImage: mainImage, // Añadimos la imagen principal
                   relevanceScore: relevance.score
                 }
               });
@@ -3034,6 +3094,44 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
               <td>${article.title}</td>
               <td>${article.articleType || 'regular'}</td>
               <td>${article.sourceName || '-'}</td>
+              <td><a href="${article.sourceUrl}" target="_blank">Ver artículo</a></td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h2>Detalle por tipo de scraping</h2>
+        
+        <h3>Artículos con scraping completo (${savedArticles.filter(a => a.articleType === 'regular' || !a.articleType).length})</h3>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Fuente</th>
+            <th>País</th>
+            <th>Enlace</th>
+          </tr>
+          ${savedArticles.filter(a => a.articleType === 'regular' || !a.articleType).map(article => `
+            <tr>
+              <td>${article.title}</td>
+              <td>${article.sourceName || '-'}</td>
+              <td>${article.pais || 'mundo'}</td>
+              <td><a href="${article.sourceUrl}" target="_blank">Ver artículo</a></td>
+            </tr>
+          `).join('')}
+        </table>
+        
+        <h3>Artículos con scraping mínimo (${savedArticles.filter(a => a.articleType === 'minimal').length})</h3>
+        <table border="1" style="border-collapse: collapse; width: 100%;">
+          <tr>
+            <th>Título</th>
+            <th>Fuente</th>
+            <th>Puntuación</th>
+            <th>Enlace</th>
+          </tr>
+          ${savedArticles.filter(a => a.articleType === 'minimal').map(article => `
+            <tr>
+              <td>${article.title}</td>
+              <td>${article.sourceName || '-'}</td>
+              <td>${article.relevanceScore || 'N/A'}</td>
               <td><a href="${article.sourceUrl}" target="_blank">Ver artículo</a></td>
             </tr>
           `).join('')}

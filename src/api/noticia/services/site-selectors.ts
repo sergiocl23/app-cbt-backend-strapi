@@ -359,15 +359,26 @@ const siteSelectors: SiteSelectors = {
       /^https?:\/\/(?:www\.)?mopc\.gov\.py\/index\.php\/noticias\/[\w-]+$/,
       /^https?:\/\/(?:www\.)?mopc\.gov\.py\/(?:\d{4})\/(?:\d{2})\/[\w-]+\/?$/
     ],
-    title: ['h1.h-2', 'article h1'],
-    content: [
-      'article p:not(.su-image-carousel-caption):not(.footer-text):not(.copyright)',
-      'article > p:not(footer p)'
+    title: [
+      'div.title h1.h-2',
+      'h1.h-2',
+      'article h1'
     ],
-    date: ['article time', 'article .date', 'article .published'],
+    content: [
+      'article p:not(.su-image-carousel-caption):not(.footer-text):not(.copyright):not(:has(.share-actions))',
+      'article > p:not(footer p):not(:has(.share-actions))',
+      'article p:not(:has(.share-actions)):not(:has(.fa-facebook-f)):not(:has(.fa-instagram)):not(:has(.fa-twitter)):not(:has(.fa-youtube)):not(:has(.fa-flickr))'
+    ],
+    date: [
+      'article time', 
+      'article .date', 
+      'article p:contains("Fecha:")', 
+      'article .published'
+    ],
     image: [
       'article .su-image-carousel-item img',
-      'article .su-image-carousel img'
+      'article .su-image-carousel img',
+      'div.su-image-carousel-item-content a img'
     ],
     country: 'paraguay'
   },
@@ -507,11 +518,13 @@ const siteSelectors: SiteSelectors = {
     ],
     date: [
       'div.col-lg-12.pt-0.pr-0.pb-0 p.text-muted',
-      '.col-lg-12 .text-muted'
+      '.col-lg-12 .text-muted',
+      'meta[property="article:published_time"]'
     ],
     image: [
       'div.col-lg-12.pb-4 img',
-      '.col-lg-12.pb-4 > img'
+      '.col-lg-12.pb-4 > img',
+      'meta[property="og:image"]'
     ],
     country: 'chile'
   },
@@ -682,26 +695,41 @@ const siteSelectors: SiteSelectors = {
   'aduananews.com': {
     urlPatterns: [
       /^https?:\/\/(?:www\.)?aduananews\.com\/[\w-]+\/?$/,
-      /^https?:\/\/(?:www\.)?aduananews\.com\/(?:\d{4})\/(?:\d{2})\/[\w-]+\/?$/
+      /^https?:\/\/(?:www\.)?aduananews\.com\/[\w-]+\/[\w-]+\/?$/
     ],
     title: [
-      '.tdb-title-text',
-      'h1.tdb-title-text'
+      'h1.tdb-title-text',
+      '.tdb-title-text'
     ],
     content: [
-      '.tdb-block-inner p',
-      '.td-fix-index p'
+      'div.tdb-block-inner.td-fix-index > p:not(:has(.m-a-box)):not(:has(.molongui-clearfix))',
+      'div.tdb-block-inner.td-fix-index p:not(:has(script)):not(:has(.m-a-box-container))'
     ],
     date: [
-      '.tdb_single_date time.entry-date',
-      '.tdb_single_date .td-module-date',
-      'time[datetime].entry-date'
+      'time.entry-date',
+      'time.entry-date.updated'
     ],
     image: [
-      '.tdb_single_featured_image img',
-      '.entry-thumb',
-      '.wp-block-image img'
+      'img.entry-thumb',
+      'img.wp-image-73359',
+      'meta[property="og:image"]'
     ],
+    dateParser: (dateText: string) => {
+      // Formato: "14 enero, 2025"
+      const match = dateText.match(/(\d{1,2})\s+([a-zé]+),\s+(\d{4})/i);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        const meses = {
+          'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04', 'mayo': '05', 'junio': '06',
+          'julio': '07', 'agosto': '08', 'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+        };
+        const mesNum = meses[mes.toLowerCase()];
+        if (mesNum) {
+          return new Date(`${año}-${mesNum}-${dia.padStart(2, '0')}T00:00:00.000Z`);
+        }
+      }
+      return null;
+    },
     country: 'argentina'
   },
 
@@ -738,19 +766,24 @@ const siteSelectors: SiteSelectors = {
     ],
     title: [
       'span.entry-title7',
-      '.entry-header .entry-title7'
+      '.entry-header .entry-title7',
+      'header.entry-header span.entry-title7'
     ],
     content: [
       '.entry-content p[style*="text-align: justify"]',
-      '.entry-content > p:not(:first-child):not(:nth-child(2)):not(:nth-child(3))'
+      '.entry-content > p[style*="text-align: justify"]:not(:has(.heateor_sss_sharing_container))',
+      '.entry-content > p:not(:first-child):not(:nth-child(2)):not(:nth-child(3)):not(:has(.heateor_sss_sharing_container))'
     ],
     date: [
       'time.entry-date.published',
       '.below-entry-meta time'
     ],
     image: [
+      '.entry-content img.size-medium',
+      '.entry-content img.alignright',
       '.entry-content img.wp-image-239454',
-      '.entry-content img[class*="wp-image"]'
+      '.entry-content img[class*="wp-image"]',
+      'meta[property="og:image"]'
     ],
     country: 'chile'
   },
@@ -1091,39 +1124,6 @@ const siteSelectors: SiteSelectors = {
     country: 'argentina'
   },
 
-  // Prensa Jujuy
-  'prensa.jujuy.gob.ar': {
-    urlPatterns: [
-      /^https?:\/\/(?:www\.)?prensa\.jujuy\.gob\.ar\/[\w-]+\/[\w-]+-n\d+$/
-    ],
-    title: [
-      'h1.title',
-      '.article-header h1.title'
-    ],
-    content: [
-      '.article-content .cuerpo p',
-      'article.article-body .article-content p',
-      '.article-body .cuerpo[data-twitter-link] p'
-    ],
-    date: [
-      '.article-date time',
-      'div.article-date time[datetime]'
-    ],
-    image: [
-      '#content-gallery img[src*="media.prensa.jujuy.gob.ar"]',
-      '.gallery img[src*="/adjuntos/"]',
-      '.itemGallery img[width="700"]'
-    ],
-    dateParser: (dateText: string) => {
-      const match = dateText.match(/(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/);
-      if (match) {
-        const [_, dia, mes, año] = match;
-        return `${dia} de ${mes} de ${año}`;
-      }
-      return null;
-    },
-    country: 'argentina'
-  },
 
   // CEI Noticias Chile
   'ceinoticias.cl': {
@@ -1957,6 +1957,280 @@ const siteSelectors: SiteSelectors = {
       }
       return null;
     }
+  },
+  // Jujuy al Día
+  'jujuyaldia.com.ar': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?jujuyaldia\.com\.ar\/\d{4}\/\d{2}\/\d{2}\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.is-title.post-title',
+      'div.post-meta-a h1'
+    ],
+    content: [
+      'div.post-content.cf.entry-content p',
+      'div.post-content p:not(:has(.a2a_button))',
+      'div.entry-content p:not(:has(.addtoany_share_save_container))'
+    ],
+    date: [
+      'time.post-date',
+      'span.has-next-icon.date time'
+    ],
+    image: [
+      'div.single-featured img',
+      'div.featured img',
+      'meta[property="og:image"]'
+    ],
+    country: 'argentina'
+  },
+  // Somos Jujuy Argentina
+  'somosjujuy.com.ar': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?somosjujuy\.com\.ar\/[\w-]+\/[\w-]+-n\d+$/
+    ],
+    title: [
+      'h1.tit-ficha',
+      '.tit-ficha'
+    ],
+    content: [
+      'div.col > p:not(:has(.rela)):not(:has(.tags-content)):not(:empty)',
+      'div.col > p:not(:has(a[href*="/jujuy/"])):not(:has(strong.sat))'
+    ],
+    date: [
+      'meta[property="article:published_time"]', // Usa la fecha del meta si está disponible
+      'time.info-time',
+      '.fecha-hora'
+    ],
+    image: [
+      'figure.image-detail.wlz img.cst_img',
+      'figure.image-detail picture img',
+      'figure.image img',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Si no hay fecha explícita en la página, usar la de publicación del meta
+      return null;
+    },
+    country: 'argentina'
+  },
+  
+  // Red Uno Bolivia
+  'reduno.com.bo': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?reduno\.com\.bo\/noticias\/[\w-]+-\d+$/
+    ],
+    title: [
+      'div.encabezado h1.titulo',
+      'h1.titulo[itemprop="headline"]'
+    ],
+    content: [
+      'div.body__cuerpo > p:not(:empty):not(:has(amp-img)):not(:has(.container_publi))',
+      'div.body__cuerpo > p:not(:has(.container-spot-back))'
+    ],
+    date: [
+      'p.fecha',
+      'div.autor-fecha p.fecha'
+    ],
+    image: [
+      'amp-img[layout="responsive"] img',
+      'amp-img img.i-amphtml-fill-content',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "20/03/2025 11:15"
+      const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+      if (match) {
+        const [_, dia, mes, año, hora, minutos] = match;
+        return new Date(`${año}-${mes}-${dia}T${hora}:${minutos}:00.000Z`);
+      }
+      return null;
+    },
+    country: 'bolivia'
+  },
+  
+  // Prensa Jujuy - Argentina (sitio oficial)
+  'prensa.jujuy.gob.ar': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?prensa\.jujuy\.gob\.ar\/[\w-]+\/[\w-]+-n\d+$/,
+      /^https?:\/\/(?:www\.)?prensa\.jujuy\.gob\.ar\/corredor-bioceanico-capricornio\/[\w-]+-n\d+$/
+    ],
+    title: [
+      'h1.title',
+      '.article-title h1.title',
+      'div.article-title h1'
+    ],
+    content: [
+      'article.article-body .article-content p',
+      'article.article-body .cuerpo p',
+      'div.cuerpo[data-twitter-link] p'
+    ],
+    date: [
+      'div.article-date time',
+      'div.article-date span time',
+      'time[datetime]'
+    ],
+    image: [
+      '#content-gallery img[src*="media.prensa.jujuy.gob.ar"]',
+      '.gallery img[src*="/adjuntos/"]',
+      '.itemGallery img[width="700"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "22 de diciembre de 2024 - 13:04"
+      const match = dateText.match(/(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})\s+-\s+(\d{1,2}):(\d{2})/);
+      if (match) {
+        const [_, dia, mes, año, hora, minuto] = match;
+        const meses = {
+          'enero': '01', 'febrero': '02', 'marzo': '03', 'abril': '04',
+          'mayo': '05', 'junio': '06', 'julio': '07', 'agosto': '08',
+          'septiembre': '09', 'octubre': '10', 'noviembre': '11', 'diciembre': '12'
+        };
+        const mesNum = meses[mes.toLowerCase()];
+        if (mesNum) {
+          return new Date(`${año}-${mesNum}-${dia.padStart(2, '0')}T${hora.padStart(2, '0')}:${minuto}:00.000Z`);
+        }
+      }
+      return null;
+    },
+    country: 'argentina'
+  },
+  
+  // H2 Foz - Brasil (noticias fronterizas)
+  'h2foz.com.br': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?h2foz\.com\.br\/(?:es\/)?[\w-]+\/[\w-]+\/?$/,
+      /^https?:\/\/(?:www\.)?h2foz\.com\.br\/(?:es\/)?fronteira\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.single-post-title .post-title',
+      'h1.single-post-title span[itemprop="headline"]',
+      '.post-title[itemprop="headline"]'
+    ],
+    content: [
+      '.entry-content > p:not(.gt-block):not(:has(.h2foz-whatsapp)):not(:has(script)):not(:has(.truvidPos))',
+      '.entry-content p:not(:has(.h2foz-desk-antes-do-conteudo)):not(:has(.h2foz-interno-paragrafo-6))',
+      '.entry-content > p:not([id^="h2foz-"])'
+    ],
+    date: [
+      'time.post-published.updated[datetime]',
+      'span.time time[datetime]',
+      '.post-meta time'
+    ],
+    image: [
+      '.single-featured img[src*="h2foz.com.br/wp-content"]',
+      'figure.single-featured img',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "Publicado em <b>26 de noviembre de 2024 - 14:46</b>"
+      const match = dateText.match(/(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})\s+-\s+(\d{1,2}):(\d{2})/);
+      if (match) {
+        const [_, dia, mes, año, hora, minuto] = match;
+        // Meses en español y portugués
+        const meses: {[key: string]: string} = {
+          // Español
+          'enero': '01', 
+          'febrero': '02', 
+          'marzo': '03', 
+          'abril': '04',
+          'mayo': '05', 
+          'junio': '06', 
+          'julio': '07', 
+          'agosto': '08',
+          'septiembre': '09', 
+          'octubre': '10', 
+          'noviembre': '11', 
+          'diciembre': '12',
+          // Portugués
+          'janeiro': '01', 
+          'fevereiro': '02', 
+          'março': '03', 
+          // abril es igual en español y portugués
+          'maio': '05', 
+          'junho': '06', 
+          'julho': '07', 
+          // agosto es igual en español y portugués
+          'setembro': '09', 
+          'outubro': '10', 
+          'novembro': '11', 
+          'dezembro': '12'
+        };
+        const mesNum = meses[mes.toLowerCase()];
+        if (mesNum) {
+          return new Date(`${año}-${mesNum}-${dia.padStart(2, '0')}T${hora.padStart(2, '0')}:${minuto}:00.000Z`);
+        }
+      }
+      return null;
+    },
+    country: 'brasil'
+  },
+  
+  // Revista EyN - América Central y Sudamérica
+  'revistaeyn.com': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?revistaeyn\.com\/[\w-]+\/[\w-]+-[A-Z]{2}\d+$/
+    ],
+    title: [
+      'h1.headline span.priority-content',
+      'h1[itemprop="headline"] span',
+      'h1.headline'
+    ],
+    content: [
+      'div.paragraph > p:not(:has(script)):not(:has(.adnotas)):not(:empty)',
+      'div.text div.paragraph > p:not(:has(.ad_block))'
+    ],
+    date: [
+      'div.date',
+      'div.date[itemprop="datePublished"]'
+    ],
+    image: [
+      'img[itemprop="image"]',
+      'div[style*="position: relative"] img[src*="//www.revistaeyn.com/binrepository/"]',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "2025-02-18"
+      const match = dateText.match(/(\d{4})-(\d{2})-(\d{2})/);
+      if (match) {
+        const [_, año, mes, dia] = match;
+        return new Date(`${año}-${mes}-${dia}T00:00:00.000Z`);
+      }
+      return null;
+    },
+    country: 'mundo'
+  },
+  
+  // Cuestión Entrerriana - Argentina
+  'cuestionentrerriana.com.ar': {
+    urlPatterns: [
+      /^https?:\/\/(?:www\.)?cuestionentrerriana\.com\.ar\/[\w-]+\/?$/
+    ],
+    title: [
+      'h1.title.single-title',
+      'h1.single-title'
+    ],
+    content: [
+      'div.post-single-content p:not(:has(.tags)):not(:has(iframe))',
+      'div.post-single-content > p:not(:has(script))'
+    ],
+    date: [
+      'span.thetime',
+      '.post-info span.thetime'
+    ],
+    image: [
+      'img.wp-post-image',
+      'img.attachment-full',
+      'meta[property="og:image"]'
+    ],
+    dateParser: (dateText: string) => {
+      // Formato: "25/02/2025"
+      const match = dateText.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+      if (match) {
+        const [_, dia, mes, año] = match;
+        return new Date(`${año}-${mes}-${dia}T00:00:00.000Z`);
+      }
+      return null;
+    },
+    country: 'argentina'
   }
 };
 
