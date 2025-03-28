@@ -217,14 +217,6 @@ export default ({ strapi }) => ({
       logger.info('=== INICIANDO SCRAPING DE NOTICIAS ===');
       const results = await this.searchNews(searchTerm, country);
       
-      // Mostrar TODOS los enlaces encontrados inicialmente
-      console.log('=== TODOS LOS ENLACES ENCONTRADOS ===');
-      console.table(results.map(result => ({
-        Título: result.title,
-        URL: result.link,
-        Fuente: result.source,
-        Fecha: result.publishedTime || 'No disponible'
-      })));
       
       // Fase 2: Procesamiento de resultados
       const savedArticles = [];
@@ -327,35 +319,10 @@ export default ({ strapi }) => ({
         }
       }
 
-      // Reporte final de dominios no procesados
-      if (failedDomains.length > 0) {
-        logger.warn('=== DOMINIOS NO IMPLEMENTADOS ===');
-        console.table(failedDomains.map(url => ({ 
-          URL: url, 
-          Dominio: new URL(url).hostname 
-        })));
-      }
       
-      // Mostrar todos los enlaces y títulos de artículos scrapeados
-      console.log('=== ARTÍCULOS SCRAPEADOS ===');
-      console.table(savedArticles.map(article => ({
-        Título: article.title,
-        URL: article.sourceUrl,
-        Estado: article.status || 'guardado'
-      })));
 
-      // Mostrar log específico de artículos minimales
-      if (minimalArticles.length > 0) {
-        console.log('\n=== ARTÍCULOS EXTRAÍDOS MINIMALMENTE ===');
-        console.table(minimalArticles);
-        logger.info(`Total de artículos minimales: ${minimalArticles.length}`);
-      } else {
-        logger.info('No se encontraron artículos minimales relevantes');
-      }
       
-      // Nuevo log de enlaces para facilitar su reutilización
       if (savedArticles.length > 0) {
-        console.log('\n=== ENLACES DE ARTÍCULOS SCRAPEADOS PARA REUTILIZACIÓN ===');
         // Ordenar por tipo de artículo y fecha para mejor organización
         const sortedArticles = [...savedArticles].sort((a, b) => {
           // Primero ordenar por tipo de artículo (regular, minimal)
@@ -368,23 +335,16 @@ export default ({ strapi }) => ({
         });
         
         // Formato para copiar y pegar fácilmente
-        console.log('ENLACES_SCRAPEADOS = [');
         sortedArticles.forEach(article => {
           const date = article.articleDate || article.publishedAt;
           const formattedDate = date ? format(new Date(date), 'yyyy-MM-dd') : 'sin-fecha';
           const articleType = article.articleType || 'regular';
           const score = article.relevanceScore || 'N/A';
-          console.log(`  '${article.sourceUrl}', // [${formattedDate}] [${articleType}] [score: ${score}] ${article.title.substring(0, 60)}...`);
         });
-        console.log('];');
-        
-        // Instrucciones para el usuario
-        console.log('\nPuedes copiar estos enlaces y guardarlos en un archivo para excluirlos en futuros scrapes');
       }
 
       return savedArticles;
     } catch (error) {
-      logger.error('Error en el scraping general:', error);
       throw error;
     }
   },
@@ -394,7 +354,6 @@ export default ({ strapi }) => ({
     try {
       // Verificar si la URL parece ser específica de un artículo
       if (!isValidArticleUrl(result.link)) {
-        logger.info(`⚠️ URL no válida para artículo minimal (parece ser una página de categoría/sección): ${result.link}`);
         return null;
       }
       
@@ -665,7 +624,6 @@ export default ({ strapi }) => ({
       }
       
       // Informe final
-      console.log('=== RESUMEN DE ARTÍCULOS ENCONTRADOS POR PAÍS ===');
       const summary = scraperConfig.optimizedSearchConfig.countries.map(country => {
         const countryArticles = allSavedArticles.filter(article => 
           article.pais?.toLowerCase() === country.name.toLowerCase()
@@ -677,12 +635,6 @@ export default ({ strapi }) => ({
         };
       });
       
-      console.table(summary);
-      
-      // Mostrar todas las URLs únicas encontradas
-      console.log('=== TODAS LAS URLs ÚNICAS ENCONTRADAS ===');
-      console.log(`Total de URLs únicas: ${allFoundUrls.size}`);
-      
       // Agrupar URLs por dominio para mejor visualización
       const domainGroups = {};
       [...allFoundUrls].forEach(url => {
@@ -693,7 +645,6 @@ export default ({ strapi }) => ({
           }
           domainGroups[domain].push(url);
         } catch (error) {
-          console.error(`URL inválida: ${url}`);
         }
       });
       
@@ -707,7 +658,6 @@ export default ({ strapi }) => ({
       
       return allSavedArticles;
     } catch (error) {
-      logger.error('Error en batchScrapeByCountry:', error);
       throw error;
     }
   },
@@ -718,7 +668,6 @@ export default ({ strapi }) => ({
    */
   async findGoogleNewsRSS(searchTerms?: string[]) {
     try {
-      console.log('=== INICIANDO BÚSQUEDA EN GOOGLE NEWS RSS ===');
       
       // Términos de búsqueda por defecto si no se proporcionan, REDUCIDOS a los más importantes
       const terms = searchTerms || [
@@ -731,9 +680,7 @@ export default ({ strapi }) => ({
       const MAX_ITEMS_PER_TERM = 10; // Limitamos a 10 resultados por término
       
       for (const term of terms) {
-        try {
-          console.log(`Buscando noticias RSS para: "${term}"`);
-          
+        try {          
           // URL del feed RSS de Google News con parámetro de tiempo (7 días)
           const googleNewsUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(term)}&hl=es&gl=LATAM&ceid=LATAM:es&when:7d`;
           
@@ -742,9 +689,7 @@ export default ({ strapi }) => ({
               'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
             }
           });
-          
-          console.log(`Respuesta recibida para "${term}". Procesando XML...`);
-          
+                    
           // Parsear XML del feed RSS
           const $ = cheerio.load(response.data, { xmlMode: true });
           
@@ -757,9 +702,7 @@ export default ({ strapi }) => ({
             const link = $(item).find('link').text().trim();
             const pubDate = new Date($(item).find('pubDate').text().trim());
             const source = $(item).find('source').text().trim();
-            
-            console.log(`[RSS Item] Título: ${title.substring(0, 50)}... | Enlace: ${link.substring(0, 30)}...`);
-            
+                        
             // Guardar enlace para resolver después
             googleNewsLinks.push({
               googleNewsUrl: link,
@@ -768,10 +711,7 @@ export default ({ strapi }) => ({
               source,
               searchTerm: term
             });
-          });
-          
-          console.log(`Encontrados ${googleNewsLinks.length} enlaces para término "${term}"`);
-          
+          });          
           // Resolver URLs con timeouts
           const resolvedItems = await resolveGoogleNewsLinks(googleNewsLinks);
           allNewsItems.push(...resolvedItems);
@@ -790,10 +730,7 @@ export default ({ strapi }) => ({
       );
       
       // Ordenar por fecha más reciente
-      uniqueResults.sort((a, b) => b.publishedDate.getTime() - a.publishedDate.getTime());
-      
-      console.log(`Total noticias resueltas: ${uniqueResults.length}`);
-      
+      uniqueResults.sort((a, b) => b.publishedDate.getTime() - a.publishedDate.getTime());      
       // Agrupar por dominio para análisis
       const groupedByDomain: Record<string, Array<any>> = {};
       uniqueResults.forEach(item => {
@@ -803,7 +740,6 @@ export default ({ strapi }) => ({
         groupedByDomain[item.sourceDomain].push(item);
       });
       
-      console.log('=== RESUMEN POR DOMINIOS ===');
       Object.entries(groupedByDomain)
         .sort((a, b) => (b[1] as Array<any>).length - (a[1] as Array<any>).length)
         .forEach(([domain, items]) => {
@@ -812,15 +748,12 @@ export default ({ strapi }) => ({
       
       return uniqueResults;
     } catch (error) {
-      console.error('Error general en búsqueda RSS:', error);
       return [];
     }
   },
 
   async findNewsCombined(ctx) {
     try {
-      console.log('=== INICIANDO BÚSQUEDA COMBINADA RSS + CSE ===');
-      
       // Obtener parámetros
       const searchTerms = typeof ctx.query.terms === 'string'
         ? ctx.query.terms.split(',').map(t => t.trim())
@@ -836,7 +769,6 @@ export default ({ strapi }) => ({
       };
       
       // 1. BÚSQUEDA VÍA RSS
-      console.log('=== FASE 1: BÚSQUEDA RSS ===');
       const rssResults = await strapi.service('api::noticia.noticia-scraper').findGoogleNewsRSS(searchTerms);
       stats.rss.found = rssResults.length;
       stats.rss.resolved = rssResults.filter(item => item.link && !item.link.includes('news.google.com')).length;
@@ -849,7 +781,6 @@ export default ({ strapi }) => ({
       const savedArticles = [];
       
       // Procesar resultados RSS
-      console.log(`Procesando ${rssResults.length} resultados de RSS...`);
       for (const item of rssResults) {
         try {
           stats.total.processed++;
@@ -860,7 +791,6 @@ export default ({ strapi }) => ({
           });
 
           if (existing.length > 0) {
-            console.log(`Artículo ya existe: ${item.link}`);
             stats.total.duplicated++;
             continue;
           }
@@ -872,9 +802,7 @@ export default ({ strapi }) => ({
           const isGoogleNewsUrl = item.link.includes('news.google.com');
           
           if (isGoogleNewsUrl) {
-            // CASO 1: URL no resuelta - guardar versión mínima
-            console.log(`Guardando versión mínima para URL no resuelta: ${item.link}`);
-            
+            // CASO 1: URL no resuelta - guardar versión mínima            
             // Crear artículo mínimo
             const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
               data: {
@@ -896,13 +824,9 @@ export default ({ strapi }) => ({
             
             savedArticles.push(minimalArticle);
             stats.total.savedMinimal++;
-            stats.total.saved++;
-            console.log(`⚠️ Artículo mínimo guardado: ${item.title}`);
-            
+            stats.total.saved++;            
           } else {
-            // CASO 2: URL resuelta - intentar extraer contenido completo
-            console.log(`Extrayendo contenido completo para: ${item.link}`);
-            
+            // CASO 2: URL resuelta - intentar extraer contenido completo            
             // Extraer datos del artículo
             const articleData = await strapi.service('api::noticia.noticia-scraper').extractArticleData(item.link, {
               title: item.title,
@@ -941,11 +865,8 @@ export default ({ strapi }) => ({
               
               savedArticles.push(savedArticle);
               stats.total.saved++;
-              console.log(`✅ Artículo completo guardado: ${articleData.title}`);
             } else {
-              // Falló la extracción, guardar versión mínima
-              console.log(`No se pudo extraer contenido, guardando mínimo: ${item.link}`);
-              
+              // Falló la extracción, guardar versión mínima              
               const minimalArticle = await strapi.entityService.create('api::noticia.noticia', {
                 data: {
                   title: item.title,
@@ -967,17 +888,14 @@ export default ({ strapi }) => ({
               savedArticles.push(minimalArticle);
               stats.total.savedMinimal++;
               stats.total.saved++;
-              console.log(`⚠️ Artículo mínimo guardado (extracción fallida): ${item.title}`);
             }
           }
         } catch (error) {
-          console.error(`Error procesando: ${item.link}`, error);
           stats.total.failed++;
         }
       }
       
       // 2. BÚSQUEDA VÍA CSE
-      console.log('=== FASE 2: BÚSQUEDA CSE ===');
       let cseResults = [];
       for (const term of searchTerms) {
         const termResults = await strapi.service('api::noticia.noticia-scraper').searchNews(term, country);
@@ -987,10 +905,8 @@ export default ({ strapi }) => ({
       
       // Filtrar duplicados entre RSS y CSE
       const uniqueCseResults = cseResults.filter(item => !processedUrls.has(item.link));
-      console.log(`CSE: ${uniqueCseResults.length} enlaces únicos de ${cseResults.length} encontrados`);
       
       // Procesar resultados CSE
-      console.log(`Procesando ${uniqueCseResults.length} resultados únicos de CSE...`);
       for (const item of uniqueCseResults) {
         try {
           stats.total.processed++;

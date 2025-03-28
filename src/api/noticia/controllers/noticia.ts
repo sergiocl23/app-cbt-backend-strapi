@@ -2816,7 +2816,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                 articleDate: item.publishedDate || new Date(),
                 pais: 'mundo',
                 articleType: 'minimal',
-                relevanceScore: null // No calculamos score de relevancia para RSS
+                relevanceScore: 90 // Asignamos score de 90 a noticias RSS
               }
             });
             
@@ -2887,7 +2887,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
                   articleDate: item.publishedDate || new Date(),
                   pais: 'mundo',
                   articleType: 'minimal',
-                  relevanceScore: null // No calculamos score para enlaces RSS
+                  relevanceScore: 90 // Asignamos score de 90 a noticias RSS
                 }
               });
               
