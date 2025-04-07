@@ -973,12 +973,11 @@ export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
     name: Schema.Attribute.String;
-    pais: Schema.Attribute.Enumeration<
-      ['chile', 'paraguay', 'brasil', 'argentina', 'otro']
-    >;
+    pais: Schema.Attribute.Enumeration<['chile']> &
+      Schema.Attribute.DefaultTo<'chile'>;
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     lastNewsletterSent: Schema.Attribute.DateTime;
-    frequency: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+    frequency: Schema.Attribute.Enumeration<['weekly']> &
       Schema.Attribute.DefaultTo<'weekly'>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;

@@ -116,22 +116,6 @@ export default {
     },
     {
       method: 'GET',
-      path: '/noticias/batch-scrape-country',
-      handler: 'noticia.batchScrapeByCountry',
-      config: {
-        auth: false,
-      }
-    },
-    {
-      method: 'GET',
-      path: '/noticias/rss-search',
-      handler: 'noticia.findNewsRSS',
-      config: {
-        auth: false,
-      }
-    },
-    {
-      method: 'GET',
       path: '/noticias/combined-search',
       handler: 'noticia.findNewsCombined',
       config: {

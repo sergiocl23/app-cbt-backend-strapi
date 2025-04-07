@@ -19,7 +19,7 @@ export default {
       }
     },
     options: {
-      rule: '13 15 * * *', // Se ejecuta a las 15:13 todos los días
+      rule: '0 6,18 * * *', // Se ejecuta a las 06:00 y 18:00 todos los días
       tz: 'America/Santiago',
       onInit: false // No se ejecuta al iniciar el servidor
     }
