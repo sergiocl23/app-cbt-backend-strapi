@@ -110,6 +110,7 @@ coverage
 ############################
 
 .env
+.env copy
 license.txt
 exports
 .strapi

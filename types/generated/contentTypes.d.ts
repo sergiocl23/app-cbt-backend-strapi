@@ -441,7 +441,6 @@ export interface PluginUsersPermissionsUser
     displayName: 'User';
   };
   options: {
-    timestamps: true;
     draftAndPublish: false;
   };
   attributes: {
@@ -472,6 +471,8 @@ export interface PluginUsersPermissionsUser
     >;
     topics: Schema.Attribute.Relation<'oneToMany', 'api::topic.topic'>;
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
+    name: Schema.Attribute.String & Schema.Attribute.Required;
+    lastName: Schema.Attribute.String & Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -850,6 +851,7 @@ export interface ApiPointPoint extends Struct.CollectionTypeSchema {
     main_image: Schema.Attribute.Media<
       'images' | 'files' | 'videos' | 'audios'
     >;
+    visible: Schema.Attribute.Boolean;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;
@@ -1083,7 +1085,7 @@ export interface ApiTopicTopic extends Struct.CollectionTypeSchema {
       Schema.Attribute.Unique &
       Schema.Attribute.SetMinMaxLength<{
         minLength: 4;
-        maxLength: 30;
+        maxLength: 300;
       }>;
     forum_tags: Schema.Attribute.Relation<
       'manyToMany',

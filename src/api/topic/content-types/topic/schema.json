@@ -41,7 +41,7 @@
       "type": "string",
       "required": true,
       "unique": true,
-      "maxLength": 30,
+      "maxLength": 300,
       "minLength": 4
     },
     "forum_tags": {
@@ -55,12 +55,13 @@
       "default": false
     },
     "images": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
       "allowedTypes": [
         "images",
         "files"
-      ],
-      "type": "media",
-      "multiple": true
+      ]
     }
   }
 }
