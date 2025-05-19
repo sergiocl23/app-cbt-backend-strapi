@@ -116,8 +116,8 @@ export default {
     },
     {
       method: 'GET',
-      path: '/noticias/batch-scrape-country',
-      handler: 'noticia.batchScrapeByCountry',
+      path: '/noticias/combined-search',
+      handler: 'noticia.findNewsCombined',
       config: {
         auth: false,
       }

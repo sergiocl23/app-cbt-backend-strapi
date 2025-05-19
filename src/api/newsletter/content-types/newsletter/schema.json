@@ -21,7 +21,7 @@
     },
     "type": {
       "type": "enumeration",
-      "enum": ["daily", "weekly", "monthly"],
+      "enum": ["weekly"],
       "default": "weekly"
     },
     "status": {
@@ -44,10 +44,6 @@
       "type": "relation",
       "relation": "oneToMany",
       "target": "api::noticia.noticia"
-    },
-    "metrics": {
-      "type": "component",
-      "component": "newsletter.metrics"
     },
     "queue": {
       "type": "component",

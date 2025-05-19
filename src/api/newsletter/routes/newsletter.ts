@@ -3,14 +3,6 @@ console.log('🛣️ Cargando rutas de newsletter');
 module.exports = {
   routes: [
     {
-      method: 'POST',
-      path: '/newsletters/test-send',
-      handler: 'api::newsletter.newsletter.testSend',
-      config: {
-        auth: false,
-      }
-    },
-    {
       method: 'GET',
       path: '/newsletters/:id/status',
       handler: 'api::newsletter.newsletter.getStatus',
@@ -26,15 +18,6 @@ module.exports = {
       config: {
         policies: [],
         middlewares: []
-      }
-    },
-    {
-      method: 'GET',
-      path: '/newsletters/metrics',
-      handler: 'newsletter.getMetrics',
-      config: {
-        policies: [],
-        auth: false
       }
     },
     {

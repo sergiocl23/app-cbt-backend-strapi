@@ -22,12 +22,9 @@
     "pais": {
       "type": "enumeration",
       "enum": [
-        "chile",
-        "paraguay",
-        "brasil",
-        "argentina",
-        "otro"
-      ]
+        "chile"
+      ],
+      "default": "chile"
     },
     "isActive": {
       "type": "boolean",
@@ -39,9 +36,7 @@
     "frequency": {
       "type": "enumeration",
       "enum": [
-        "daily",
-        "weekly",
-        "monthly"
+        "weekly"
       ],
       "default": "weekly"
     }

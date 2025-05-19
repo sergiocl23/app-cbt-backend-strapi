@@ -59,6 +59,7 @@ export interface EmailContent {
   html: string;
   text?: string;
   content?: string;
+  noticias?: number[];
 }
 
 export interface Subscriber {

@@ -106,38 +106,6 @@ export interface NewsletterProgress extends Struct.ComponentSchema {
   };
 }
 
-export interface NewsletterMetrics extends Struct.ComponentSchema {
-  collectionName: 'components_newsletter_metrics';
-  info: {
-    displayName: 'Metrics';
-    description: 'M\u00E9tricas del env\u00EDo';
-    example: {
-      description: 'Este componente almacena m\u00E9tricas de rendimiento del env\u00EDo';
-      usage: {
-        startTime: '2024-02-19T10:00:00Z';
-        endTime: '2024-02-19T10:15:30Z';
-        averageDeliveryTime: 1.2;
-        bounceRate: 0.02;
-        successRate: 0.98;
-      };
-      explanation: {
-        startTime: 'Cuando inici\u00F3 el env\u00EDo';
-        endTime: 'Cuando termin\u00F3 el env\u00EDo';
-        averageDeliveryTime: 'Tiempo promedio de env\u00EDo en segundos';
-        bounceRate: 'Tasa de rebote (2%)';
-        successRate: 'Tasa de \u00E9xito (98%)';
-      };
-    };
-  };
-  attributes: {
-    startTime: Schema.Attribute.DateTime & Schema.Attribute.Required;
-    endTime: Schema.Attribute.DateTime;
-    averageDeliveryTime: Schema.Attribute.Float;
-    bounceRate: Schema.Attribute.Float;
-    successRate: Schema.Attribute.Float;
-  };
-}
-
 export interface NewsletterEmailQueue extends Struct.ComponentSchema {
   collectionName: 'components_newsletter_email_queue';
   info: {
@@ -190,7 +158,6 @@ declare module '@strapi/strapi' {
     export interface ComponentSchemas {
       'newsletter.queue-job': NewsletterQueueJob;
       'newsletter.progress': NewsletterProgress;
-      'newsletter.metrics': NewsletterMetrics;
       'newsletter.email-queue': NewsletterEmailQueue;
     }
   }

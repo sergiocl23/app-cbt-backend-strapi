@@ -10,31 +10,13 @@
 'use strict';
 
 import { factories } from '@strapi/strapi';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { renderNewsletter } from '../templates/base.template';
+
 const { createCoreController } = factories;
 
 module.exports = createCoreController('api::newsletter.newsletter', ({ strapi }) => ({
-  async testSend(ctx) {
-    try {
-      const { type = 'weekly' } = ctx.request.body;
-      if (!['daily', 'weekly', 'monthly'].includes(type)) {
-        return ctx.badRequest('Tipo de newsletter inválido');
-      }
-
-      console.log('🚀 Iniciando envío de prueba...');
-      console.log('📝 Request body:', ctx.request.body);
-
-      const result = await strapi.service('api::newsletter.newsletter').send(type);
-
-      return {
-        success: true,
-        data: result
-      };
-
-    } catch (error) {
-      return ctx.throw(500, error.message);
-    }
-  },
-
   async getStatus(ctx) {
     try {
       const { id } = ctx.params;
@@ -71,67 +53,141 @@ module.exports = createCoreController('api::newsletter.newsletter', ({ strapi })
     }
   },
 
-  async getMetrics(ctx) {
-    try {
-      const metrics = await strapi
-        .service('api::newsletter.newsletter')
-        .getDailyMetrics();
-
-      return {
-        success: true,
-        data: metrics
-      };
-    } catch (error) {
-      return ctx.throw(500, error.message);
-    }
-  },
-
   /**
    * Envío directo de correos sin usar el sistema de cola
    */
   async envioDirecto(ctx) {
-    const { type = 'weekly' } = ctx.request.body;
+    // Usar siempre tipo weekly
+    const type = 'weekly';
     
-    console.log('🚀 Iniciando envío directo...');
+    console.log('==================================================');
+    console.log('🚀 INICIANDO PROCESO DE ENVÍO DIRECTO DE NEWSLETTER');
+    console.log('==================================================');
     console.log('📝 Request body:', ctx.request.body);
     
     try {
-      // Generar contenido del newsletter
-      const content = await strapi.service('api::newsletter.newsletter').generateNewsletterContent(type);
-      
       // Obtener suscriptores activos
+      console.log('🔍 Buscando suscriptores activos...');
       const subscribers = await strapi.entityService.findMany('api::subscriber.subscriber', {
         filters: { isActive: true }
       });
       
-      console.log(`📧 Encontrados ${subscribers.length} suscriptores activos`);
+      console.log(`📧 Encontrados ${subscribers.length} suscriptores activos:`);
+      subscribers.forEach(s => console.log(`  - ${s.email} (ID: ${s.id})`));
+      
+      if (subscribers.length === 0) {
+        console.log('⚠️ No hay suscriptores activos para enviar newsletters');
+        return {
+          success: false,
+          message: 'No hay suscriptores activos'
+        };
+      }
       
       // Resultados del envío
       const resultados = {
         exitos: 0,
         fallos: 0,
+        omitidos: 0,
         detalles: []
       };
       
       // Enviar directamente a cada suscriptor sin usar la cola
       for (const subscriber of subscribers) {
+        console.log('\n-----------------------------------------');
+        console.log(`📧 PROCESANDO SUSCRIPTOR: ${subscriber.email}`);
+        console.log('-----------------------------------------');
+        
         try {
-          // Usamos directamente el método de envío de email que ya existe
-          await strapi.service('api::newsletter.newsletter').sendEmail(subscriber, content);
+          // Calcular rango de fechas para este suscriptor
+          console.log(`⏱️ Calculando rango de fechas para ${subscriber.email}...`);
+          const { startDate, endDate } = await strapi
+            .service('api::newsletter.newsletter')
+            .calculateNewsDateRange(subscriber);
           
-          console.log(`✅ Correo enviado con éxito a ${subscriber.email}`);
-          resultados.exitos++;
-          resultados.detalles.push({
-            email: subscriber.email,
-            status: 'success',
-            time: new Date()
-          });
+          console.log(`📅 Rango de fechas para ${subscriber.email}: ${startDate.toISOString()} hasta ${endDate.toISOString()}`);
           
-          // Actualizar la fecha del último newsletter
-          await strapi.service('api::newsletter.newsletter').updateLastNewsletterSent(subscriber.id);
+          // Obtener noticias para este rango de fechas
+          console.log(`📰 Buscando noticias en el rango...`);
+          const noticias = await strapi
+            .service('api::newsletter.newsletter')
+            .fetchNoticiasByDateRange(startDate, endDate);
+          
+          console.log(`📊 Encontradas ${noticias.length} noticias para ${subscriber.email}`);
+          
+          if (noticias.length === 0) {
+            console.log(`⚠️ No hay noticias nuevas para ${subscriber.email}`);
+            resultados.omitidos++;
+            resultados.detalles.push({
+              email: subscriber.email,
+              status: 'skipped',
+              reason: 'No hay noticias nuevas',
+              time: new Date()
+            });
+            continue;
+          }
+          
+          // Mostrar IDs de las noticias encontradas
+          console.log(`📑 IDs de noticias: ${noticias.map(n => n.id).join(', ')}`);
+          
+          // Agrupar noticias por país para este suscriptor
+          console.log(`🗂️ Agrupando noticias por país...`);
+          const noticiasPorPais = await strapi
+            .service('api::newsletter.newsletter')
+            .agruparNoticiasPorPais(noticias);
+          
+          // Generar periodo de texto para el newsletter
+          const periodoTexto = `del ${format(startDate, "d 'de' MMMM", { locale: es })} al ${format(endDate, "d 'de' MMMM", { locale: es })}`;
+          console.log(`📆 Periodo para asunto: ${periodoTexto}`);
+          
+          // Generar html del newsletter
+          console.log(`🖌️ Generando HTML del newsletter...`);
+          const htmlContent = renderNewsletter(noticiasPorPais, type, periodoTexto);
+          console.log(`✅ HTML generado (longitud: ${htmlContent.length} caracteres)`);
+          
+          // Crear contenido del email
+          const content = {
+            subject: `Corredor Bioceánico - Resumen Semanal ${periodoTexto}`,
+            html: htmlContent,
+            content: htmlContent,
+            noticias: noticias.map(n => n.id)
+          };
+          
+          // Enviar email
+          console.log(`📩 Enviando email a ${subscriber.email}...`);
+          let enviado;
+          try {
+            enviado = await strapi.service('api::newsletter.newsletter').sendEmail(subscriber, content);
+            console.log(`✅ Resultado del envío a ${subscriber.email}: ${enviado ? 'EXITOSO' : 'FALLIDO'}`);
+          } catch (sendError) {
+            console.error(`❌ Error capturado durante el envío a ${subscriber.email}:`, sendError);
+            enviado = false;
+          }
+          
+          if (enviado) {
+            console.log(`📨 Correo enviado con éxito a ${subscriber.email}`);
+            resultados.exitos++;
+            resultados.detalles.push({
+              email: subscriber.email,
+              status: 'success',
+              noticiaCount: noticias.length,
+              time: new Date()
+            });
+            
+            // La actualización de lastNewsletter ya se hace dentro de sendEmail
+          } else {
+            console.error(`❌ Fallo al enviar correo a ${subscriber.email}`);
+            resultados.fallos++;
+            resultados.detalles.push({
+              email: subscriber.email,
+              status: 'failed',
+              error: 'Error durante el envío',
+              time: new Date()
+            });
+          }
           
         } catch (error) {
-          console.error(`❌ Error al enviar correo a ${subscriber.email}:`, error.message);
+          console.error(`❌ Error en el procesamiento para ${subscriber.email}:`, error);
+          console.error(error.stack);
           resultados.fallos++;
           resultados.detalles.push({
             email: subscriber.email,
@@ -142,16 +198,30 @@ module.exports = createCoreController('api::newsletter.newsletter', ({ strapi })
         }
         
         // Pequeña pausa entre envíos para no saturar el servidor SMTP
+        console.log(`⏳ Esperando 1 segundo antes del siguiente envío...`);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
+      
+      console.log('==================================================');
+      console.log('📊 RESUMEN DEL PROCESO DE ENVÍO:');
+      console.log(`✅ Exitosos: ${resultados.exitos}`);
+      console.log(`❌ Fallidos: ${resultados.fallos}`);
+      console.log(`⏭️ Omitidos: ${resultados.omitidos}`);
+      console.log('==================================================');
       
       return {
         success: true,
         total: subscribers.length,
-        resultados
+        resultados: {
+          exitos: resultados.exitos,
+          fallos: resultados.fallos,
+          omitidos: resultados.omitidos,
+          detalles: resultados.detalles
+        }
       };
     } catch (error) {
-      console.error('❌ Error en el proceso de envío directo:', error);
+      console.error('❌ ERROR GENERAL EN EL PROCESO:', error);
+      console.error(error.stack);
       ctx.throw(500, error.message);
       return { success: false, error: error.message };
     }

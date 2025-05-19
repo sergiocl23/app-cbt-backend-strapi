@@ -663,36 +663,6 @@ export interface ApiInterestInterest extends Struct.CollectionTypeSchema {
   };
 }
 
-export interface ApiMetricMetric extends Struct.CollectionTypeSchema {
-  collectionName: 'metrics';
-  info: {
-    singularName: 'metric';
-    pluralName: 'metrics';
-    displayName: 'Metric';
-  };
-  options: {
-    draftAndPublish: false;
-  };
-  attributes: {
-    name: Schema.Attribute.String & Schema.Attribute.Required;
-    key: Schema.Attribute.String &
-      Schema.Attribute.Required &
-      Schema.Attribute.Unique;
-    value: Schema.Attribute.Float & Schema.Attribute.DefaultTo<0>;
-    date: Schema.Attribute.Date & Schema.Attribute.Required;
-    metadata: Schema.Attribute.JSON;
-    createdAt: Schema.Attribute.DateTime;
-    updatedAt: Schema.Attribute.DateTime;
-    publishedAt: Schema.Attribute.DateTime;
-    createdBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    updatedBy: Schema.Attribute.Relation<'oneToOne', 'admin::user'> &
-      Schema.Attribute.Private;
-    locale: Schema.Attribute.String;
-    localizations: Schema.Attribute.Relation<'oneToMany', 'api::metric.metric'>;
-  };
-}
-
 export interface ApiNewsletterNewsletter extends Struct.CollectionTypeSchema {
   collectionName: 'newsletters';
   info: {
@@ -707,7 +677,7 @@ export interface ApiNewsletterNewsletter extends Struct.CollectionTypeSchema {
   attributes: {
     subject: Schema.Attribute.String & Schema.Attribute.Required;
     content: Schema.Attribute.RichText & Schema.Attribute.Required;
-    type: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+    type: Schema.Attribute.Enumeration<['weekly']> &
       Schema.Attribute.DefaultTo<'weekly'>;
     status: Schema.Attribute.Enumeration<
       ['pending', 'processing', 'completed', 'failed', 'cancelled']
@@ -717,7 +687,6 @@ export interface ApiNewsletterNewsletter extends Struct.CollectionTypeSchema {
     sentDate: Schema.Attribute.DateTime;
     completedDate: Schema.Attribute.DateTime;
     noticias: Schema.Attribute.Relation<'oneToMany', 'api::noticia.noticia'>;
-    metrics: Schema.Attribute.Component<'newsletter.metrics', false>;
     queue: Schema.Attribute.Component<'newsletter.email-queue', false> &
       Schema.Attribute.Required;
     createdAt: Schema.Attribute.DateTime;
@@ -1004,12 +973,11 @@ export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
       Schema.Attribute.Required &
       Schema.Attribute.Unique;
     name: Schema.Attribute.String;
-    pais: Schema.Attribute.Enumeration<
-      ['chile', 'paraguay', 'brasil', 'argentina', 'otro']
-    >;
+    pais: Schema.Attribute.Enumeration<['chile']> &
+      Schema.Attribute.DefaultTo<'chile'>;
     isActive: Schema.Attribute.Boolean & Schema.Attribute.DefaultTo<true>;
     lastNewsletterSent: Schema.Attribute.DateTime;
-    frequency: Schema.Attribute.Enumeration<['daily', 'weekly', 'monthly']> &
+    frequency: Schema.Attribute.Enumeration<['weekly']> &
       Schema.Attribute.DefaultTo<'weekly'>;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
@@ -1483,7 +1451,6 @@ declare module '@strapi/strapi' {
       'api::email-queue.email-queue': ApiEmailQueueEmailQueue;
       'api::forum-tag.forum-tag': ApiForumTagForumTag;
       'api::interest.interest': ApiInterestInterest;
-      'api::metric.metric': ApiMetricMetric;
       'api::newsletter.newsletter': ApiNewsletterNewsletter;
       'api::noticia.noticia': ApiNoticiaNoticia;
       'api::point.point': ApiPointPoint;
