@@ -5,17 +5,69 @@
 
 import { factories } from '@strapi/strapi';
 const { createCoreController } = factories;
+import axios from 'axios';
 
 module.exports = createCoreController('api::subscriber.subscriber', ({ strapi }) => ({
   async subscribe(ctx) {
-    // Extraemos sólo el email, ignoramos cualquier otro campo como país que pueda enviarse
-    const { email: rawEmail } = ctx.request.body;
+    console.log('[TEST SUPER DEBUG] Raw ctx.request.body:', JSON.stringify(ctx.request.body, null, 2));
+
+    // Extraemos el email y ahora también el recaptchaToken
+    const { email: rawEmail, recaptchaToken } = ctx.request.body;
     // Siempre usamos 'chile' independientemente de lo que envíe el frontend
     const pais = 'chile';
     
     console.log('[TEST] Email recibido:', rawEmail);
+    console.log('[TEST] Token reCAPTCHA recibido:', recaptchaToken ? 'Sí' : 'No');
+
+    // ---- INICIO DE VERIFICACIÓN reCAPTCHA ----
+    if (!recaptchaToken) {
+      console.log('[TEST] Error: Falta el token de reCAPTCHA.');
+      return ctx.badRequest('Token de reCAPTCHA es requerido.');
+    }
 
     try {
+      const secretKey = process.env.RECAPTCHA_V3_SECRET_KEY;
+      if (!secretKey) {
+        console.error('[ERROR CRÍTICO] La clave secreta de reCAPTCHA no está configurada en .env');
+        return ctx.internalServerError('Error de configuración del servidor (reCAPTCHA).');
+      }
+      const verificationUrl = `https://www.google.com/recaptcha/api/siteverify`;
+      
+      console.log('[TEST] Enviando solicitud de verificación de reCAPTCHA a Google...');
+      const response = await axios.post(verificationUrl, null, {
+        params: {
+          secret: secretKey,
+          response: recaptchaToken,
+          // remoteip: ctx.request.ip // Opcional: IP del usuario.
+        }
+      });
+      
+      const recaptchaData = response.data;
+      console.log('[TEST] Respuesta de verificación de Google reCAPTCHA:', recaptchaData);
+
+      if (!recaptchaData.success) {
+        console.warn('[TEST] Verificación de reCAPTCHA fallida:', recaptchaData['error-codes']);
+        return ctx.badRequest({
+          message: 'Verificación de reCAPTCHA fallida.',
+          details: { errors: recaptchaData['error-codes'] }
+        });
+      }
+
+      const scoreThreshold = 0.5; 
+      if (recaptchaData.score < scoreThreshold) {
+        console.warn(`[TEST] Puntuación de reCAPTCHA baja: ${recaptchaData.score}. Posible bot.`);
+        // Podrías ser más genérico en el mensaje al usuario para no dar pistas sobre la puntuación
+        return ctx.forbidden('No se pudo verificar la solicitud. Inténtalo de nuevo.');
+      }
+      
+      // Asumimos que la acción en el frontend será 'submit_newsletter_subscription'
+      if (recaptchaData.action !== 'submit_newsletter_subscription') { 
+        console.warn(`[TEST] Acción de reCAPTCHA no coincide. Esperado: 'submit_newsletter_subscription', Recibido: '${recaptchaData.action}'`);
+        return ctx.badRequest('Acción de reCAPTCHA inválida.');
+      }
+      console.log(`[INFO] Verificación de reCAPTCHA exitosa. Puntuación: ${recaptchaData.score}.`);
+    // ---- FIN DE VERIFICACIÓN reCAPTCHA ----
+
       // Normalizar el email (convertir a minúsculas y eliminar espacios)
       const email = rawEmail ? rawEmail.toLowerCase().trim() : '';
       // Extraer nombre del email (parte antes del @)

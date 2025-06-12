@@ -82,17 +82,48 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
         }
       }
 
-      // Filtrar por tags
-      if (tags) {
-        const tagList = Array.from(new Set(Array.isArray(tags) ? tags : [tags]));
-        advancedFilters.$and = tagList.map(tag => ({
-          tags: {
-            nombre: {
-              $eq: tag
+      // NUEVA LÓGICA PARA FILTRADO DE TAGS CON COMPORTAMIENTO AND
+      if (advancedFilters.tags && advancedFilters.tags.nombre && advancedFilters.tags.nombre.$in && Array.isArray(advancedFilters.tags.nombre.$in)) {
+        const tagNamesToFilter = advancedFilters.tags.nombre.$in;
+
+        if (tagNamesToFilter.length > 0) {
+          // Crear las condiciones AND para cada tag
+          const tagAndConditions = tagNamesToFilter.map(tagName => ({
+            tags: { // Nombre de la relación en el modelo 'noticia'
+              nombre: { // Campo por el cual filtrar dentro del modelo 'tag'
+                $eq: tagName
+              }
             }
+          }));
+
+          // Eliminar el filtro original 'tags.nombre.$in' para evitar conflictos
+          delete advancedFilters.tags.nombre.$in;
+          // Limpiar el objeto 'nombre' si queda vacío
+          if (Object.keys(advancedFilters.tags.nombre).length === 0) {
+            delete advancedFilters.tags.nombre;
           }
-        }));
+          // Limpiar el objeto 'tags' si queda vacío
+          if (Object.keys(advancedFilters.tags).length === 0) {
+            delete advancedFilters.tags;
+          }
+
+          // Añadir las nuevas condiciones al filtro $and global
+          if (advancedFilters.$and && Array.isArray(advancedFilters.$and)) {
+            // Si ya existe un $and (por otros filtros), añadir las condiciones de tags
+            advancedFilters.$and.push(...tagAndConditions);
+          } else {
+            // Si no existe $and, crearlo con las condiciones de tags
+            advancedFilters.$and = tagAndConditions;
+          }
+        }
+        // Nota: Si tagNamesToFilter.length es 0, no se hace nada.
+        // Si es 1, la lógica anterior con $in funcionaba bien, y esta nueva
+        // lógica con $and y una sola condición $eq también es correcta.
+        // El cambio principal es para múltiples tags.
       }
+      // La lógica anterior para ctx.query.tags (que se basaba en un parámetro `tags` directo en la URL)
+      // ha sido eliminada/reemplazada por esta, ya que los logs indican que los tags vienen
+      // a través de filters[tags][nombre][$in].
 
       // Filtrar por país
       if (pais) {
@@ -227,221 +258,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
     // Devolver el array de objetos con id y nombre
     return tagsResult;
   },
-  // Método para mostrar el formulario de creación
-  async crearNoticiaForm(ctx) {
-    try {
-      console.log(`\n=== FORMULARIO DE CREACIÓN DE NOTICIA: INICIO (${new Date().toISOString()}) ===`);
-      
-      // Obtener todas las etiquetas disponibles para el selector
-      const availableTags = await strapi.db.query('api::tag.tag').findMany();
-      console.log(`Etiquetas disponibles: ${availableTags.length}`);
-      
-      return ctx.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Crear Nueva Noticia</title>
-          <style>
-            body { font-family: Arial, sans-serif; margin: 20px; }
-            .container { max-width: 800px; margin: 0 auto; }
-            h1 { color: #2c3e50; }
-            .form-group { margin-bottom: 15px; }
-            label { display: block; margin-bottom: 5px; font-weight: bold; }
-            input[type="text"], textarea, select { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
-            textarea { min-height: 100px; }
-            .tags-container { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 5px; }
-            .tag-option { display: flex; align-items: center; }
-            .tag-option input { margin-right: 5px; width: auto; }
-            .button-group { display: flex; gap: 15px; margin-top: 20px; }
-            button { padding: 10px 15px; background-color: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; }
-            button:hover { background-color: #45a049; }
-            .image-upload { border: 2px dashed #ccc; padding: 20px; margin-bottom: 20px; text-align: center; background-color: #f8f8f8; border-radius: 4px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Crear Nueva Noticia</h1>
-            <form action="/api/noticias/crear" method="POST" enctype="multipart/form-data">
-              <div class="form-group">
-                <label for="title">Título *</label>
-                <input type="text" id="title" name="title" required>
-              </div>
-              
-              <div class="form-group">
-                <label for="content">Contenido *</label>
-                <textarea id="content" name="content" required></textarea>
-                <div class="word-counter" id="contentCounter">0 palabras</div>
-              </div>
-              
-              <div class="form-group">
-                <label for="summary">Resumen</label>
-                <textarea id="summary" name="summary" maxlength="500"></textarea>
-                <button type="button" id="generateSummary" class="ai-button" disabled>Generar con IA</button>
-                <div id="summaryAlert" class="alert-info">
-                  Para generar un resumen automático, el contenido debe tener al menos 100 palabras.
-                </div>
-              </div>
-              
-              <div class="form-group">
-                <label for="pais">País *</label>
-                <select id="pais" name="pais" required>
-                  <option value="chile">Chile</option>
-                  <option value="paraguay">Paraguay</option>
-                  <option value="brasil">Brasil</option>
-                  <option value="argentina">Argentina</option>
-                  <option value="mundo">Mundo</option>
-                </select>
-              </div>
-              
-              <!-- Campos ocultos con valores predeterminados -->
-              <input type="hidden" id="sourceName" name="sourceName" value="Corredor Biocenico">
-              <input type="hidden" id="articleType" name="articleType" value="regular">
-              
-              <!-- Imagen destacada -->
-              <div class="image-upload">
-                <h3>Imagen Destacada</h3>
-                <input type="file" id="featuredImage" name="featuredImage" accept="image/jpeg, image/png, image/gif">
-                <div class="image-upload-info">
-                  <p>Formatos aceptados: JPG, PNG, GIF</p>
-                  <p>Tamaño máximo: 20 MB</p>
-                  <p class="info-text" style="color: #e74c3c;">Si no desea cambiar la imagen, deje este campo vacío</p>
-                </div>
-              </div>
-              
-              <!-- Sección para imágenes adicionales -->
-              <div class="image-upload">
-                <h3>Imágenes Adicionales (máximo 5)</h3>
-                <input type="file" id="additionalImages" name="additionalImages" accept="image/jpeg, image/png, image/gif" multiple>
-                <div class="image-upload-info">
-                  <p>Formatos aceptados: JPG, PNG, GIF</p>
-                  <p>Tamaño máximo: 20 MB por imagen</p>
-                  <p>Puedes seleccionar hasta 5 imágenes</p>
-                  <p class="info-text" style="color: #e74c3c;">Si no desea cambiar las imágenes, deje este campo vacío</p>
-                </div>
-              </div>
-              
-              <!-- Selección múltiple de etiquetas usando checkboxes -->
-              <div class="form-group">
-                <label>Etiquetas</label>
-                <div class="tags-container">
-                  ${availableTags && availableTags.length ? availableTags.map(tag => `
-                    <div class="tag-option">
-                      <input type="checkbox" 
-                             id="tag-${tag.id}" 
-                             name="selectedTags[]" 
-                             value="${tag.id}">
-                      <label for="tag-${tag.id}">${tag.nombre || tag.name || 'Etiqueta sin nombre'}</label>
-                    </div>
-                  `).join('') : '<div class="no-tags">No hay etiquetas disponibles</div>'}
-                </div>
-              </div>
-              
-              <div class="button-group">
-                <button type="submit" name="draft" value="true">Guardar como borrador</button>
-                <button type="submit" name="publish" value="true">Publicar ahora</button>
-              </div>
-            </form>
-            
-            <div class="back-link">
-              <a href="/api/noticias/listar">Volver a la lista de noticias</a>
-            </div>
-          </div>
-          
-          <script>
-            document.addEventListener('DOMContentLoaded', function() {
-              const contentTextarea = document.getElementById('content');
-              const summaryButton = document.getElementById('generateSummary');
-              const wordCounter = document.getElementById('contentCounter');
-              const summaryAlert = document.getElementById('summaryAlert');
-              const titleInput = document.getElementById('title');
-              
-              // Función para contar palabras correctamente
-              const countWords = (text) => {
-                return text.trim().match(/\S+/g)?.length || 0;
-              };
-
-              // Actualizar contador al cargar la página
-              const initialText = contentTextarea.value;
-              const initialWordCount = countWords(initialText);
-              wordCounter.textContent = initialWordCount + ' palabras';
-              
-              if (initialWordCount >= 100) {
-                summaryButton.disabled = false;
-                summaryAlert.style.display = 'none';
-              }
-
-              contentTextarea.addEventListener('input', function() {
-                const text = this.value;
-                const wordCount = countWords(text);
-                wordCounter.textContent = wordCount + ' palabras';
-                
-                // Habilitar/deshabilitar botón de IA
-                summaryButton.disabled = wordCount < 100;
-                summaryAlert.style.display = wordCount < 100 ? 'block' : 'none';
-              });
-              
-              // Botón para generar resumen con IA
-              summaryButton.addEventListener('click', async function() {
-                const content = contentTextarea.value;
-                const title = titleInput.value;
-                
-                if (!content || content.trim().split(/\\s+/).filter(Boolean).length < 100) {
-                  alert('El contenido debe tener al menos 100 palabras para generar un resumen.');
-                  return;
-                }
-                
-                try {
-                  summaryButton.disabled = true;
-                  summaryButton.textContent = 'Generando...';
-                  
-                  const response = await fetch('/api/noticias/generar-resumen', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ content, title })
-                  });
-                  
-                  if (!response.ok) {
-                    throw new Error('Error al generar el resumen');
-                  }
-                  
-                  const data = await response.json();
-                  document.getElementById('summary').value = data.summary;
-                  
-                } catch (error) {
-                  console.error('Error:', error);
-                  alert('No se pudo generar el resumen. Inténtalo de nuevo más tarde.');
-                } finally {
-                  summaryButton.disabled = false;
-                  summaryButton.textContent = 'Generar con IA';
-                }
-              });
-              
-              // Validación del formulario
-              const form = document.querySelector('form');
-              form.addEventListener('submit', function(e) {
-                const wordCount = countWords(contentTextarea.value);
-                if (wordCount < 50) {
-                  e.preventDefault();
-                  alert('El contenido debe tener al menos 50 palabras.');
-                  return false;
-                }
-                return true;
-              });
-            });
-          </script>
-        </body>
-      </html>
-    `);
-    } catch (error) {
-      console.error('Error al crear noticia:', error);
-      return ctx.redirect('/api/noticias/crear?error=' + encodeURIComponent('No se pudo crear la noticia. Inténtalo de nuevo.'));
-    }
-  },
-  
+ 
   // Método para generar resumen usando IA
   async generarResumen(ctx) {
     try {
@@ -511,499 +328,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
       return ctx.badRequest('Error al generar el resumen');
     }
   },
-  
-  // Método para listar noticias manualmente
-  async listarNoticiasManual(ctx) {
-    try {
-      console.log('\n=== LISTADO DE NOTICIAS: INICIO ===');
-      
-      // Obtener el modo de visualización desde la query
-      const { modo = 'all', success, error, id } = ctx.query;
-      
-      console.log(`Obteniendo noticias en modo: ${modo}`);
-
-      // Definir los filtros según el modo
-      let whereClause = {};
-      
-      if (modo === 'published') {
-        console.log('Obteniendo solo noticias publicadas...');
-        whereClause = {
-          publishedAt: { $notNull: true }
-        };
-      } else if (modo === 'draft') {
-        console.log('Obteniendo solo noticias en borrador...');
-        whereClause = {
-          publishedAt: { $null: true }
-        };
-      } else {
-        console.log('Obteniendo todas las noticias (publicadas y borradores)...');
-        // Sin filtros para mostrar todas
-        whereClause = {}; // Explícitamente vacío para asegurar que no hay filtros
-      }
-
-      console.log('Filters:', JSON.stringify(whereClause));
-      
-      // Obtener todas las noticias con los filtros aplicados
-      const noticias = await strapi.db.query('api::noticia.noticia').findMany({
-        where: whereClause,
-        orderBy: { createdAt: 'desc' },
-        populate: ['tags', 'featuredImage', 'additionalImages']
-      });
-      
-      console.log(`Se encontraron ${noticias.length} noticias con el filtro seleccionado`);
-      
-      // Contar el total de noticias para el botón "Ver Todas"
-      const totalNoticias = await strapi.db.query('api::noticia.noticia').count({});
-      console.log(`Total de noticias en la base de datos: ${totalNoticias}`);
-
-      // Crear la respuesta HTML
-      const htmlResponse = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Lista de Noticias</title>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <style>
-            body {
-              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-              line-height: 1.6;
-              color: #333;
-              background-color: #f9f9f9;
-              margin: 0;
-              padding: 20px;
-            }
-            
-            .container {
-              max-width: 1200px;
-              margin: 0 auto;
-              background-color: white;
-              border-radius: 10px;
-              box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-              padding: 30px;
-            }
-            
-            h1 {
-              color: #2c3e50;
-              margin-bottom: 30px;
-              border-bottom: 2px solid #eee;
-              padding-bottom: 15px;
-              text-align: center;
-            }
-            
-            .filters {
-              display: flex;
-              justify-content: center;
-              margin-bottom: 30px;
-              gap: 15px;
-              flex-wrap: wrap;
-            }
-            
-            .filter-button {
-              display: inline-block;
-              padding: 10px 20px;
-              background-color: #f5f5f5;
-              color: #333;
-              border: none;
-              border-radius: 5px;
-              cursor: pointer;
-              font-weight: 500;
-              text-decoration: none;
-              transition: all 0.3s ease;
-            }
-            
-            .filter-button:hover {
-              background-color: #e0e0e0;
-            }
-            
-            .filter-button.active {
-              background-color: #3498db;
-              color: white;
-            }
-            
-            .filter-button.published {
-              background-color: #2ecc71;
-              color: white;
-            }
-            
-            .filter-button.published:hover {
-              background-color: #27ae60;
-            }
-            
-            .filter-button.draft {
-              background-color: #e74c3c;
-              color: white;
-            }
-            
-            .filter-button.draft:hover {
-              background-color: #c0392b;
-            }
-            
-            .filter-button.all {
-              background-color: #9b59b6;
-              color: white;
-            }
-            
-            .filter-button.all:hover {
-              background-color: #8e44ad;
-            }
-            
-            .news-list {
-              list-style: none;
-              padding: 0;
-              display: grid;
-              grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-              gap: 30px;
-            }
-            
-            .news-item {
-              background-color: white;
-              border-radius: 8px;
-              box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-              padding: 20px;
-              transition: transform 0.3s ease;
-              position: relative;
-              border: 1px solid #eee;
-            }
-            
-            .news-item:hover {
-              transform: translateY(-5px);
-              box-shadow: 0 8px 16px rgba(0, 0, 0, 0.15);
-            }
-            
-            .status {
-              display: inline-block;
-              padding: 5px 10px;
-              border-radius: 20px;
-              font-size: 12px;
-              font-weight: bold;
-              margin-bottom: 10px;
-            }
-            
-            .status.published {
-              background-color: #e8f5e9;
-              color: #2e7d32;
-              border: 1px solid #81c784;
-            }
-            
-            .status.draft {
-              background-color: #ffebee;
-              color: #c62828;
-              border: 1px solid #ef9a9a;
-            }
-            
-            .news-meta {
-              font-size: 14px;
-              color: #666;
-              margin-bottom: 15px;
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-            }
-            
-            .news-meta div {
-              background-color: #f5f5f5;
-              padding: 3px 8px;
-              border-radius: 4px;
-            }
-            
-            .tag-list {
-              margin: 15px 0;
-              display: flex;
-              flex-wrap: wrap;
-              gap: 8px;
-            }
-            
-            .tag-item {
-              background-color: #e3f2fd;
-              color: #1976d2;
-              font-size: 12px;
-              border-radius: 4px;
-              padding: 4px 8px;
-            }
-            
-            .news-image {
-              max-width: 100%;
-              border-radius: 6px;
-              margin-top: 10px;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            
-            .news-gallery {
-              display: flex;
-              flex-wrap: wrap;
-              gap: 10px;
-              margin-top: 10px;
-            }
-            
-            .gallery-image {
-              width: 100px;
-              height: 100px;
-              object-fit: cover;
-              border-radius: 5px;
-              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            }
-            
-            .no-results {
-              text-align: center;
-              padding: 40px 0;
-              font-size: 18px;
-              color: #999;
-            }
-            
-            .source-url {
-              margin: 15px 0;
-            }
-            
-            .source-link {
-              display: inline-block;
-              background-color: #3498db;
-              color: white;
-              padding: 8px 16px;
-              border-radius: 5px;
-              text-decoration: none;
-              font-weight: bold;
-              transition: background-color 0.3s ease;
-            }
-            
-            .source-link:hover {
-              background-color: #2980b9;
-            }
-            
-            .image-url {
-              margin-top: 5px;
-              font-size: 12px;
-              color: #666;
-              background-color: #f5f5f5;
-              padding: 5px 8px;
-              border-radius: 4px;
-              word-break: break-all;
-            }
-            
-            h3 {
-              margin-top: 0;
-              color: #2c3e50;
-              font-size: 1.2rem;
-              line-height: 1.4;
-            }
-            
-            h4 {
-              color: #3498db;
-              margin: 15px 0 10px;
-              font-size: 0.9rem;
-            }
-            
-            p {
-              margin: 10px 0;
-              color: #555;
-              font-size: 0.9rem;
-            }
-            
-            .create-button {
-              display: block;
-              width: 200px;
-              text-align: center;
-              margin: 0 auto 30px;
-              padding: 12px 25px;
-              background-color: #3498db;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              font-weight: 500;
-              transition: background-color 0.3s ease;
-              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-            }
-            
-            .create-button:hover {
-              background-color: #2980b9;
-            }
-            
-            .action-buttons {
-              margin-top: 20px;
-              display: flex;
-              gap: 10px;
-            }
-            
-            .edit-button {
-              display: inline-block;
-              padding: 8px 15px;
-              background-color: #ff9800;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              font-weight: 500;
-              transition: background-color 0.3s ease;
-            }
-            
-            .edit-button:hover {
-              background-color: #f57c00;
-            }
-            
-            .publish-button {
-              display: inline-block;
-              padding: 8px 15px;
-              background-color: #4CAF50;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              font-weight: 500;
-              transition: background-color 0.3s ease;
-            }
-            
-            .publish-button:hover {
-              background-color: #388E3C;
-            }
-            
-            .unpublish-button {
-              display: inline-block;
-              padding: 8px 15px;
-              background-color: #f44336;
-              color: white;
-              text-decoration: none;
-              border-radius: 5px;
-              font-weight: 500;
-              transition: background-color 0.3s ease;
-            }
-            
-            .unpublish-button:hover {
-              background-color: #d32f2f;
-            }
-
-            .delete-button {
-              background-color: #e74c3c;
-              color: white;
-              padding: 8px 15px;
-              border-radius: 5px;
-              text-decoration: none;
-              cursor: pointer;
-              border: none;
-              font-weight: 500;
-              transition: background-color 0.3s ease;
-            }
-
-            .delete-button:hover {
-              background-color: #c0392b;
-            }
-
-            .delete-form {
-              display: inline-block;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Lista de Noticias</h1>
-            
-            <a href="/api/noticias/crear" class="create-button">Crear Nueva Noticia</a>
-            
-            <div class="filters">
-              <a href="/api/noticias/listar?modo=all" class="filter-button all ${modo === 'all' ? 'active' : ''}">Ver Todas (${totalNoticias})</a>
-              <a href="/api/noticias/listar?modo=published" class="filter-button published ${modo === 'published' ? 'active' : ''}">Ver Publicadas</a>
-              <a href="/api/noticias/listar?modo=draft" class="filter-button draft ${modo === 'draft' ? 'active' : ''}">Ver Borradores</a>
-            </div>
-            
-            ${noticias.length === 0 ? 
-              `<div class="no-results">No se encontraron noticias${modo !== 'all' ? ' con este filtro' : ''}.</div>` : 
-              `<ul class="news-list">
-                ${noticias.map((noticia: any) => `
-                  <li class="news-item">
-                    <span class="status ${noticia.publishedAt ? 'published' : 'draft'}">
-                      ${noticia.publishedAt ? 'Publicada' : 'Borrador'}
-                    </span>
-                    <h3>${noticia.title}</h3>
-                    <div class="news-meta">
-                      <div>ID: ${noticia.id}</div>
-                      <div>Creada: ${new Date(noticia.createdAt).toLocaleString('es-ES')}</div>
-                      ${noticia.publishedAt 
-                        ? `<div>Publicada: ${new Date(noticia.publishedAt).toLocaleString('es-ES')}</div>` 
-                        : ''}
-                      ${noticia.articleType 
-                        ? `<div>Tipo: ${noticia.articleType}</div>` 
-                        : ''}
-                    </div>
-                    ${noticia.summary ? `<p>${noticia.summary}</p>` : ''}
-                    ${noticia.sourceUrl 
-                      ? `<div class="source-url">
-                          <a href="${noticia.sourceUrl}" target="_blank" class="source-link">
-                            Ver noticia original (${noticia.sourceName || 'Fuente externa'})
-                          </a>
-                         </div>` 
-                      : ''}
-                    ${noticia.tags && noticia.tags.length > 0 
-                      ? `
-                        <div class="tag-list">
-                          ${noticia.tags.map((tag: any) => `
-                            <span class="tag-item">${tag.nombre || tag.name || tag.id}</span>
-                          `).join('')}
-                        </div>
-                      ` 
-                      : ''}
-                    ${noticia.featuredImage 
-                      ? `
-                        <div>
-                          <h4>Imagen Destacada:</h4>
-                          <img src="${noticia.featuredImage.url}" alt="${noticia.title}" class="news-image">
-                          <div class="image-url">URL: ${noticia.featuredImage.url}</div>
-                        </div>
-                      ` 
-                      : ''}
-                    ${noticia.mainImage 
-                      ? `
-                        <div>
-                          <h4>Imagen Principal:</h4>
-                          <img src="${noticia.mainImage}" alt="${noticia.title}" class="news-image">
-                          <div class="image-url">URL: ${noticia.mainImage}</div>
-                        </div>
-                      ` 
-                      : ''}
-                    ${noticia.additionalImages && noticia.additionalImages.length > 0 
-                      ? `
-                        <div>
-                          <h4>Imágenes Adicionales (${noticia.additionalImages.length}):</h4>
-                          <div class="news-gallery">
-                            ${noticia.additionalImages.map((img: any) => `
-                              <img src="${img.url}" alt="" class="gallery-image">
-                            `).join('')}
-                          </div>
-                        </div>
-                      ` 
-                      : ''}
-                    
-                    <div class="action-buttons">
-                      <a href="/api/noticias/editar/${noticia.id}" 
-                         class="edit-button">
-                        Editar
-                      </a>
-                      ${!noticia.publishedAt 
-                        ? `<a href="/api/noticias/publicar/${noticia.id}" 
-                             class="publish-button">
-                            Publicar
-                          </a>`
-                        : `<a href="/api/noticias/despublicar/${noticia.id}"
-                             class="unpublish-button">
-                            Despublicar
-                          </a>`
-                      }
-                      <form class="delete-form" action="/api/noticias/eliminar/${noticia.id}" method="POST">
-                        <button type="submit" class="delete-button" onclick="return confirm('¿Estás seguro de eliminar esta noticia?')">Eliminar</button>
-                      </form>
-                    </div>
-                  </li>
-                `).join('')}
-              </ul>`
-            }
-          </div>
-        </body>
-      </html>
-      `;
-
-      return ctx.send(htmlResponse);
-    } catch (error) {
-      console.error('Error al listar noticias:', error);
-      ctx.throw(500, `Error al listar noticias: ${error.message}`);
-    }
-  },
-
+ 
   // Método para publicar una noticia desde la vista
   async publicarNoticia(ctx) {
     try {
@@ -1402,498 +727,6 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
     } catch (error) {
       console.error('Error al crear noticia:', error);
       return ctx.redirect('/api/noticias/crear?error=' + encodeURIComponent('No se pudo crear la noticia. Inténtalo de nuevo.'));
-    }
-  },
-  
-  // Método para mostrar el formulario de edición
-  async editarNoticiaForm(ctx) {
-    try {
-      const { id } = ctx.params;
-      
-      if (!id) {
-        return ctx.badRequest('Se requiere un ID de noticia');
-      }
-      
-      console.log(`Cargando formulario de edición para noticia ID: ${id}`);
-      
-      // Obtener todas las etiquetas disponibles para el selector
-      const availableTags = await strapi.db.query('api::tag.tag').findMany();
-      console.log(`Etiquetas disponibles: ${availableTags.length}`);
-      
-      // Obtener la noticia con sus relaciones
-      try {
-        // Usamos strapi.db.query directamente para evitar problemas con 'draft/publish'
-        const noticia = await strapi.db.query('api::noticia.noticia').findOne({
-          where: { id },
-          populate: ['tags', 'featuredImage', 'additionalImages']
-        });
-        
-        if (!noticia) {
-          console.error(`Noticia con ID ${id} no encontrada`);
-          return ctx.notFound('Noticia no encontrada');
-        }
-        
-        console.log('Noticia encontrada:', {
-          id: noticia.id,
-          title: noticia.title,
-          publishedAt: noticia.publishedAt,
-          tags: noticia.tags ? noticia.tags.length : 0,
-          tagsIds: noticia.tags ? noticia.tags.map(t => t.id).join(', ') : 'ninguno'
-        });
-        
-        return ctx.send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="UTF-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1.0">
-            <title>Editar Noticia</title>
-            <style>
-              body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                line-height: 1.6;
-                color: #333;
-                background-color: #f8f9fa;
-                margin: 0;
-                padding: 20px;
-              }
-              
-              .container {
-                max-width: 900px;
-                margin: 0 auto;
-                background-color: #fff;
-                padding: 30px;
-                border-radius: 8px;
-                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-              }
-              
-              h1 {
-                color: #2c3e50;
-                margin-bottom: 30px;
-                text-align: center;
-                border-bottom: 2px solid #eee;
-                padding-bottom: 15px;
-              }
-              
-              .form-group {
-                margin-bottom: 25px;
-              }
-              
-              label {
-                display: block;
-                margin-bottom: 8px;
-                font-weight: 600;
-                color: #445;
-              }
-              
-              input[type="text"],
-              select,
-              textarea {
-                width: 100%;
-                padding: 12px;
-                border: 1px solid #ddd;
-                border-radius: 5px;
-                font-size: 16px;
-                color: #333;
-                box-sizing: border-box;
-              }
-              
-              textarea {
-                min-height: 150px;
-                resize: vertical;
-              }
-              
-              input[type="file"] {
-                border: none;
-                padding: 8px 0;
-              }
-              
-              button {
-                background-color: #3498db;
-                color: white;
-                padding: 12px 20px;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 16px;
-                font-weight: 600;
-                transition: background-color 0.3s;
-              }
-              
-              button:hover {
-                background-color: #2980b9;
-              }
-              
-              .back-link {
-                margin-top: 20px;
-                text-align: center;
-              }
-              
-              .back-link a {
-                display: inline-block;
-                color: #3498db;
-                text-decoration: none;
-                font-weight: 500;
-              }
-              
-              .back-link a:hover {
-                text-decoration: underline;
-              }
-              
-              .image-upload {
-                margin-bottom: 25px;
-                border: 1px solid #eee;
-                border-radius: 8px;
-                padding: 15px;
-                background-color: #f9f9f9;
-              }
-              
-              .image-upload h3 {
-                margin-top: 0;
-                color: #333;
-                font-size: 16px;
-                margin-bottom: 15px;
-              }
-              
-              .image-preview {
-                margin-top: 15px;
-                text-align: center;
-              }
-              
-              .image-preview img {
-                max-width: 300px;
-                max-height: 200px;
-                border-radius: 5px;
-                box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-              }
-              
-              .gallery-preview {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin-top: 15px;
-              }
-              
-              .gallery-preview img {
-                width: 100px;
-                height: 100px;
-                object-fit: cover;
-                border-radius: 5px;
-                box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-              }
-              
-              .info-text {
-                font-size: 14px;
-                color: #666;
-                margin-top: 5px;
-              }
-              
-              .button-group {
-                display: flex;
-                gap: 15px;
-                margin-top: 20px;
-              }
-              
-              .summary-container {
-                position: relative;
-                margin-bottom: 20px;
-              }
-              
-              .ai-button {
-                position: absolute;
-                right: 0;
-                top: 0;
-                background-color: #2ecc71;
-                color: white;
-                border: none;
-                padding: 8px 12px;
-                cursor: pointer;
-                border-radius: 4px;
-                font-size: 14px;
-                transition: background-color 0.3s;
-              }
-              
-              .ai-button:hover {
-                background-color: #27ae60;
-              }
-              
-              .ai-button:disabled {
-                background-color: #95a5a6;
-                cursor: not-allowed;
-              }
-              
-              .word-counter {
-                font-size: 12px;
-                color: #666;
-                margin-top: 5px;
-                text-align: right;
-              }
-              
-              .alert-info {
-                background-color: #d1ecf1;
-                color: #0c5460;
-                padding: 10px;
-                border-radius: 4px;
-                margin-bottom: 20px;
-                display: none;
-              }
-              
-              .error-message {
-                background-color: #f8d7da;
-                color: #721c24;
-                padding: 12px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-                border: 1px solid #f5c6cb;
-              }
-              
-              .success-message {
-                background-color: #d4edda;
-                color: #155724;
-                padding: 12px;
-                border-radius: 5px;
-                margin-bottom: 20px;
-                border: 1px solid #c3e6cb;
-              }
-              
-              .tag-select {
-                display: none; /* Ocultar el select antiguo */
-              }
-              
-              .tags-container {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin-top: 5px;
-              }
-              
-              .tag-option {
-                display: flex;
-                align-items: center;
-                background: #f0f0f0;
-                padding: 8px 12px;
-                border-radius: 20px;
-              }
-              
-              .tag-option input {
-                margin-right: 8px;
-              }
-              
-              .tag-option:hover {
-                background: #e0e0e0;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>
-                Editar Noticia
-                <span class="status-badge ${noticia.publishedAt ? 'status-published' : 'status-draft'}">
-                  ${noticia.publishedAt ? 'Publicada' : 'Borrador'}
-                </span>
-              </h1>
-              
-              ${ctx.query.error ? `<div class="error-message">${ctx.query.error}</div>` : ''}
-              ${ctx.query.success ? `<div class="success-message">Noticia actualizada exitosamente</div>` : ''}
-              
-              <form action="/api/noticias/editar/${noticia.id}" method="POST" enctype="multipart/form-data">
-                <div class="form-group">
-                  <label for="title">Título *</label>
-                  <input type="text" id="title" name="title" value="${noticia.title || ''}" required>
-                </div>
-                
-                <div class="form-group">
-                  <label for="content">Contenido *</label>
-                  <textarea id="content" name="content" required>${noticia.content || ''}</textarea>
-                  <div class="word-counter" id="contentCounter">0 palabras</div>
-                </div>
-                
-                <div class="form-group summary-container">
-                  <label for="summary">Resumen</label>
-                  <textarea id="summary" name="summary" maxlength="500">${noticia.summary || ''}</textarea>
-                  <button type="button" id="generateSummary" class="ai-button" disabled>Generar con IA</button>
-                  <div id="summaryAlert" class="alert-info">
-                    Para generar un resumen automático, el contenido debe tener al menos 100 palabras.
-                  </div>
-                </div>
-                
-                <div class="form-group">
-                  <label for="pais">País *</label>
-                  <select id="pais" name="pais" required>
-                    <option value="chile" ${noticia.pais === 'chile' ? 'selected' : ''}>Chile</option>
-                    <option value="paraguay" ${noticia.pais === 'paraguay' ? 'selected' : ''}>Paraguay</option>
-                    <option value="brasil" ${noticia.pais === 'brasil' ? 'selected' : ''}>Brasil</option>
-                    <option value="argentina" ${noticia.pais === 'argentina' ? 'selected' : ''}>Argentina</option>
-                    <option value="mundo" ${noticia.pais === 'mundo' ? 'selected' : ''}>Mundo</option>
-                  </select>
-                </div>
-                
-                <!-- Campos ocultos con valores predeterminados -->
-                <input type="hidden" id="sourceName" name="sourceName" value="${noticia.sourceName || 'Corredor Biocenico'}">
-                <input type="hidden" id="articleType" name="articleType" value="${noticia.articleType || 'regular'}">
-                
-                <!-- Imagen destacada -->
-                <div class="image-upload">
-                  <h3>Imagen Destacada</h3>
-                  <input type="file" id="featuredImage" name="featuredImage" accept="image/jpeg, image/png, image/gif">
-                  <div class="image-upload-info">
-                    <p>Formatos aceptados: JPG, PNG, GIF</p>
-                    <p>Tamaño máximo: 20 MB</p>
-                    <p class="info-text" style="color: #e74c3c;">Si no desea cambiar la imagen, deje este campo vacío</p>
-                  </div>
-                  ${noticia.featuredImage ? `
-                  <div class="image-preview">
-                    <p>Imagen actual:</p>
-                    <img src="${noticia.featuredImage.url}" alt="${noticia.title}">
-                    <p class="info-text">Si sube una nueva imagen, reemplazará la actual</p>
-                  </div>` : ''}
-                </div>
-                
-                <!-- Sección para imágenes adicionales -->
-                <div class="image-upload">
-                  <h3>Imágenes Adicionales (máximo 5)</h3>
-                  <input type="file" id="additionalImages" name="additionalImages" accept="image/jpeg, image/png, image/gif" multiple>
-                  <div class="image-upload-info">
-                    <p>Formatos aceptados: JPG, PNG, GIF</p>
-                    <p>Tamaño máximo: 20 MB por imagen</p>
-                    <p>Puedes seleccionar hasta 5 imágenes</p>
-                    <p class="info-text" style="color: #e74c3c;">Si no desea cambiar las imágenes, deje este campo vacío</p>
-                  </div>
-                  ${noticia.additionalImages && noticia.additionalImages.length > 0 ? `
-                  <div class="gallery-preview">
-                    <p>Imágenes actuales (${noticia.additionalImages.length}):</p>
-                    <div class="gallery-preview">
-                      ${noticia.additionalImages.map(img => `
-                        <img src="${img.url}" alt="">
-                      `).join('')}
-                    </div>
-                    <p class="info-text">Si sube nuevas imágenes, estas reemplazarán todas las actuales</p>
-                  </div>` : ''}
-                </div>
-                
-                <div class="form-group">
-                  <label>Etiquetas</label>
-                  <div class="tags-container">
-                    ${availableTags.map(tag => {
-                      const isSelected = noticia.tags && noticia.tags.some(t => t.id === tag.id);
-                      return `
-                        <div class="tag-option">
-                          <input type="checkbox" id="tag-${tag.id}" name="selectedTags" value="${tag.id}" ${isSelected ? 'checked' : ''}>
-                          <label for="tag-${tag.id}">${tag.nombre}</label>
-                        </div>
-                      `;
-                    }).join('')}
-                  </div>
-                </div>
-                
-                <div class="button-group">
-                  <button type="submit" name="draft" value="true">Guardar como borrador</button>
-                  <button type="submit" name="publish" value="true">Publicar ahora</button>
-                </div>
-              </form>
-              
-              <div class="back-link">
-                <a href="/api/noticias/listar">Volver a la lista de noticias</a>
-              </div>
-            </div>
-            
-            <script>
-              document.addEventListener('DOMContentLoaded', function() {
-                const contentTextarea = document.getElementById('content');
-                const summaryButton = document.getElementById('generateSummary');
-                const wordCounter = document.getElementById('contentCounter');
-                const summaryAlert = document.getElementById('summaryAlert');
-                const titleInput = document.getElementById('title');
-                
-                // Función para contar palabras correctamente
-                const countWords = (text) => {
-                  return text.trim().match(/\S+/g)?.length || 0;
-                };
-
-                // Actualizar contador al cargar la página
-                const initialText = contentTextarea.value;
-                const initialWordCount = countWords(initialText);
-                wordCounter.textContent = initialWordCount + ' palabras';
-                
-                if (initialWordCount >= 100) {
-                  summaryButton.disabled = false;
-                  summaryAlert.style.display = 'none';
-                }
-
-                contentTextarea.addEventListener('input', function() {
-                  const text = this.value;
-                  const wordCount = countWords(text);
-                  wordCounter.textContent = wordCount + ' palabras';
-                  
-                  // Habilitar/deshabilitar botón de IA
-                  summaryButton.disabled = wordCount < 100;
-                  summaryAlert.style.display = wordCount < 100 ? 'block' : 'none';
-                });
-                
-                // Botón para generar resumen con IA
-                summaryButton.addEventListener('click', async function() {
-                  const content = contentTextarea.value;
-                  const title = titleInput.value;
-                  
-                  if (!content || content.trim().split(/\\s+/).filter(Boolean).length < 100) {
-                    alert('El contenido debe tener al menos 100 palabras para generar un resumen.');
-                    return;
-                  }
-                  
-                  try {
-                    summaryButton.disabled = true;
-                    summaryButton.textContent = 'Generando...';
-                    
-                    const response = await fetch('/api/noticias/generar-resumen', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json'
-                      },
-                      body: JSON.stringify({
-                        content,
-                        title
-                      })
-                    });
-                    
-                    if (!response.ok) {
-                      throw new Error('Error al generar el resumen');
-                    }
-                    
-                    const data = await response.json();
-                    document.getElementById('summary').value = data.summary;
-                    
-                  } catch (error) {
-                    console.error('Error:', error);
-                    alert('No se pudo generar el resumen. Inténtalo de nuevo más tarde.');
-                  } finally {
-                    summaryButton.disabled = false;
-                    summaryButton.textContent = 'Generar con IA';
-                  }
-                });
-                
-                // Formulario
-                const form = document.querySelector('form');
-                form.addEventListener('submit', function(e) {
-                  const wordCount = countWords(contentTextarea.value);
-                  if (wordCount < 50) {
-                    e.preventDefault();
-                    alert('El contenido debe tener al menos 50 palabras.');
-                    return false;
-                  }
-                  return true;
-                });
-              });
-            </script>
-          </body>
-        </html>
-        `);
-      } catch (findError) {
-        console.error('Error al buscar la noticia:', findError);
-        return ctx.redirect('/api/noticias/listar?error=' + encodeURIComponent('No se pudo cargar la noticia para editar'));
-      }
-    } catch (error) {
-      console.error('Error al cargar formulario de edición:', error);
-      return ctx.redirect('/api/noticias/listar?error=' + encodeURIComponent('No se pudo cargar el formulario de edición'));
     }
   },
   
@@ -2388,7 +1221,6 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
   async verNoticia(ctx) {
     try {
       const { id } = ctx.params;
-      const { format = 'html' } = ctx.query; // Nuevo parámetro para especificar el formato
       
       if (!id) {
         return ctx.badRequest('Se requiere un ID de noticia');
@@ -2404,240 +1236,92 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
         return ctx.notFound('Noticia no encontrada');
       }
 
-      // Base URL para rutas relativas
+      // Base URL para rutas relativas (útil si las URLs de las imágenes son relativas)
       const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
 
-      // Si se solicita en formato JSON, devolver los datos estructurados
-      if (format === 'json') {
-        // Normalizar featuredImage
-        let featuredImage = null;
-        if (noticia.featuredImage) {
-          featuredImage = {
-            id: noticia.featuredImage.id,
-            name: noticia.featuredImage.name,
-            url: noticia.featuredImage.url?.startsWith('/') 
-              ? `${baseUrl}${noticia.featuredImage.url}` 
-              : noticia.featuredImage.url,
+      // Devolver siempre en formato JSON
+      // Normalizar featuredImage
+      let featuredImage = null;
+      if (noticia.featuredImage) {
+        featuredImage = {
+          id: noticia.featuredImage.id,
+          name: noticia.featuredImage.name,
+          url: noticia.featuredImage.url?.startsWith('/') 
+            ? `${baseUrl}${noticia.featuredImage.url}` 
+            : noticia.featuredImage.url,
+          formats: {}
+        };
+        
+        // Procesar formatos si existen
+        if (noticia.featuredImage.formats) {
+          const formats = noticia.featuredImage.formats;
+          Object.keys(formats).forEach(formatKey => { // Renombrado 'format' a 'formatKey' para evitar conflicto de nombres
+            if (formats[formatKey] && formats[formatKey].url) {
+              featuredImage.formats[formatKey] = {
+                url: formats[formatKey].url?.startsWith('/') 
+                  ? `${baseUrl}${formats[formatKey].url}` 
+                  : formats[formatKey].url,
+                width: formats[formatKey].width,
+                height: formats[formatKey].height
+              };
+            }
+          });
+        }
+      }
+      
+      // Normalizar additionalImages
+      const additionalImages = [];
+      if (noticia.additionalImages && Array.isArray(noticia.additionalImages)) {
+        for (const img of noticia.additionalImages) {
+          if (!img) continue;
+          
+          const processedImg = {
+            id: img.id,
+            name: img.name,
+            url: img.url?.startsWith('/') 
+              ? `${baseUrl}${img.url}` 
+              : img.url,
             formats: {}
           };
           
-          // Procesar formatos si existen
-          if (noticia.featuredImage.formats) {
-            const formats = noticia.featuredImage.formats;
-            Object.keys(formats).forEach(format => {
-              if (formats[format] && formats[format].url) {
-                featuredImage.formats[format] = {
-                  url: formats[format].url?.startsWith('/') 
-                    ? `${baseUrl}${formats[format].url}` 
-                    : formats[format].url,
-                  width: formats[format].width,
-                  height: formats[format].height
+          if (img.formats) {
+            const formats = img.formats;
+            Object.keys(formats).forEach(formatKey => { // Renombrado 'format' a 'formatKey'
+              if (formats[formatKey] && formats[formatKey].url) {
+                processedImg.formats[formatKey] = {
+                  url: formats[formatKey].url?.startsWith('/') 
+                    ? `${baseUrl}${formats[formatKey].url}` 
+                    : formats[formatKey].url,
+                  width: formats[formatKey].width,
+                  height: formats[formatKey].height
                 };
               }
             });
           }
+          
+          additionalImages.push(processedImg);
         }
-        
-        // Normalizar additionalImages
-        const additionalImages = [];
-        if (noticia.additionalImages && Array.isArray(noticia.additionalImages)) {
-          for (const img of noticia.additionalImages) {
-            if (!img) continue;
-            
-            const processedImg = {
-              id: img.id,
-              name: img.name,
-              url: img.url?.startsWith('/') 
-                ? `${baseUrl}${img.url}` 
-                : img.url,
-              formats: {}
-            };
-            
-            if (img.formats) {
-              const formats = img.formats;
-              Object.keys(formats).forEach(format => {
-                if (formats[format] && formats[format].url) {
-                  processedImg.formats[format] = {
-                    url: formats[format].url?.startsWith('/') 
-                      ? `${baseUrl}${formats[format].url}` 
-                      : formats[format].url,
-                    width: formats[format].width,
-                    height: formats[format].height
-                  };
-                }
-              });
-            }
-            
-            additionalImages.push(processedImg);
-          }
-        }
-
-        // Devolver la noticia y sus imágenes en formato JSON
-        return {
-          id: noticia.id,
-          title: noticia.title,
-          slug: noticia.slug,
-          content: noticia.content,
-          summary: noticia.summary,
-          publishedAt: noticia.publishedAt,
-          articleDate: noticia.articleDate,
-          pais: noticia.pais,
-          sourceName: noticia.sourceName,
-          sourceUrl: noticia.sourceUrl,
-          tags: noticia.tags,
-          featuredImage,
-          additionalImages
-        };
       }
 
-      // Formato por defecto: HTML
-      // Formatear la fecha para mostrarla
-      const fechaFormateada = noticia.articleDate 
-        ? new Date(noticia.articleDate).toLocaleDateString('es-CL', {
-            year: 'numeric',
-            month: 'long',
-            day: 'numeric'
-          })
-        : 'Sin fecha';
+      // Devolver la noticia y sus imágenes en formato JSON
+      // ctx.body = { // Asignar directamente al return o a ctx.send para claridad
+      return {
+        id: noticia.id,
+        title: noticia.title,
+        slug: noticia.slug,
+        content: noticia.content,
+        summary: noticia.summary,
+        publishedAt: noticia.publishedAt,
+        articleDate: noticia.articleDate,
+        pais: noticia.pais,
+        sourceName: noticia.sourceName,
+        sourceUrl: noticia.sourceUrl,
+        tags: noticia.tags,
+        featuredImage,
+        additionalImages
+      };
+      // La sección de HTML ha sido eliminada.
 
-      // HTML para mostrar la noticia individual
-      const html = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <meta charset="utf-8">
-            <title>${noticia.title}</title>
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                line-height: 1.6;
-                margin: 0;
-                padding: 20px;
-                max-width: 1200px;
-                margin: 0 auto;
-                color: #333;
-              }
-              .container {
-                background-color: #fff;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                padding: 30px;
-                margin-bottom: 20px;
-              }
-              h1 {
-                font-size: 28px;
-                margin-top: 0;
-                color: #2C3E50;
-              }
-              .meta {
-                color: #7f8c8d;
-                margin-bottom: 20px;
-                font-size: 14px;
-                display: flex;
-                flex-wrap: wrap;
-                gap: 20px;
-              }
-              .meta div {
-                margin-right: 15px;
-              }
-              .tags {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 8px;
-                margin: 20px 0;
-              }
-              .tag {
-                background-color: #e9f5f8;
-                color: #3498db;
-                padding: 4px 10px;
-                border-radius: 20px;
-                font-size: 12px;
-              }
-              .content {
-                margin: 30px 0;
-                line-height: 1.8;
-              }
-              .featured-image {
-                width: 100%;
-                max-height: 500px;
-                object-fit: cover;
-                border-radius: 8px;
-                margin: 20px 0;
-              }
-              .additional-images {
-                display: flex;
-                flex-wrap: wrap;
-                gap: 10px;
-                margin: 20px 0;
-              }
-              .additional-image {
-                width: 150px;
-                height: 150px;
-                object-fit: cover;
-                border-radius: 4px;
-              }
-              .back-link {
-                display: inline-block;
-                margin-top: 20px;
-                color: #3498db;
-                text-decoration: none;
-              }
-              .back-link:hover {
-                text-decoration: underline;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>${noticia.title}</h1>
-              
-              <div class="meta">
-                <div>ID: ${noticia.id}</div>
-                <div>Creada: ${new Date(noticia.createdAt).toLocaleString()}</div>
-                ${noticia.publishedAt ? `<div>Publicada: ${new Date(noticia.publishedAt).toLocaleString()}</div>` : ''}
-                ${noticia.pais ? `<div>País: ${noticia.pais}</div>` : ''}
-                ${noticia.sourceName ? `<div>Fuente: ${noticia.sourceName}</div>` : ''}
-              </div>
-              
-              ${noticia.tags && noticia.tags.length > 0 ? `
-                <div class="tags">
-                  ${noticia.tags.map(tag => `<span class="tag">${tag.nombre || tag.name || ''}</span>`).join('')}
-                </div>
-              ` : ''}
-              
-              <div class="summary">${noticia.summary || ''}</div>
-              
-              ${noticia.featuredImage ? `
-                <img class="featured-image" src="${
-                  noticia.featuredImage.url.startsWith('/') 
-                    ? baseUrl + noticia.featuredImage.url 
-                    : noticia.featuredImage.url
-                }" alt="${noticia.title}">
-                <div>Imagen Destacada: ${noticia.featuredImage.name || ''}</div>
-              ` : ''}
-              
-              <div class="content">${noticia.content || ''}</div>
-              
-              ${noticia.additionalImages && noticia.additionalImages.length > 0 ? `
-                <h3>Imágenes Adicionales (${noticia.additionalImages.length}):</h3>
-                <div class="additional-images">
-                  ${noticia.additionalImages.map(img => `
-                    <img class="additional-image" src="${
-                      img.url.startsWith('/') ? baseUrl + img.url : img.url
-                    }" alt="">
-                  `).join('')}
-                </div>
-              ` : ''}
-
-              <a href="/api/noticias/listar" class="back-link">← Volver a la lista de noticias</a>
-            </div>
-          </body>
-        </html>
-      `;
-
-      ctx.set('Content-Type', 'text/html; charset=utf-8');
-      return ctx.send(html);
     } catch (error) {
       console.error('Error al mostrar noticia:', error);
       ctx.internalServerError('Error al mostrar la noticia');
