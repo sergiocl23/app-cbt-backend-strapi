@@ -23,5 +23,40 @@ export default {
       tz: 'America/Santiago',
       onInit: false // No se ejecuta al iniciar el servidor
     }
+  },
+
+  /**
+   * Envío automático de newsletter diario a las 08:00
+   */
+  autoSendNewsletter: {
+    task: async ({ strapi }) => {
+      strapi.log.info('[CRON] Iniciando envío automático de newsletter...');
+      try {
+        // const res = await fetch('http://localhost:1337/api/newsletters/envio-directo', {
+        const res = await fetch(process.env.PUBLIC_URL+'/api/newsletters/envio-directo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Si el endpoint requiere autenticación, agrega:
+            // 'Authorization': 'Bearer TU_TOKEN_AQUI'
+          }
+        });
+
+        const result = await res.json();
+        strapi.log.info('[CRON] Newsletter enviado correctamente: ' + JSON.stringify(result));
+      } catch (error) {
+        strapi.log.error('[CRON] Error al enviar newsletter:', error);
+        strapi.log.error('[CRON] Stack trace:', error.stack);
+        strapi.log.error('[CRON] Timestamp:', new Date().toISOString());
+      }
+    },
+    options: {
+      // rule: '0 8 * * *', // Todos los días a las 08:00
+      rule: '*/2 * * * *', // Cada 2 minutos
+      tz: 'America/Santiago',
+      onInit: false
+    }
   }
+
+  
 }; 
