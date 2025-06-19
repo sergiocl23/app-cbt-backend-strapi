@@ -51,8 +51,8 @@ export default {
       }
     },
     options: {
-      // rule: '0 8 * * *', // Todos los días a las 08:00
-      rule: '*/2 * * * *', // Cada 2 minutos
+      rule: '0 8 * * 1', // A las 08:00, solo los lunes
+      // rule: '*/2 * * * *', // Cada 2 minutos
       tz: 'America/Santiago',
       onInit: false
     }
