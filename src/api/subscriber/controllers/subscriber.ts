@@ -16,6 +16,7 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
     // Siempre usamos 'chile' independientemente de lo que envíe el frontend
     const pais = 'chile';
     
+    /*
     console.log('[TEST] Email recibido:', rawEmail);
     console.log('[TEST] Token reCAPTCHA recibido:', recaptchaToken ? 'Sí' : 'No');
 
@@ -24,8 +25,10 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
       console.log('[TEST] Error: Falta el token de reCAPTCHA.');
       return ctx.badRequest('Token de reCAPTCHA es requerido.');
     }
+    */
 
     try {
+      /*
       const secretKey = process.env.RECAPTCHA_V3_SECRET_KEY;
       if (!secretKey) {
         console.error('[ERROR CRÍTICO] La clave secreta de reCAPTCHA no está configurada en .env');
@@ -67,6 +70,7 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
       }
       console.log(`[INFO] Verificación de reCAPTCHA exitosa. Puntuación: ${recaptchaData.score}.`);
     // ---- FIN DE VERIFICACIÓN reCAPTCHA ----
+    */
 
       // Normalizar el email (convertir a minúsculas y eliminar espacios)
       const email = rawEmail ? rawEmail.toLowerCase().trim() : '';
