@@ -40,12 +40,13 @@
       "inversedBy": "posts"
     },
     "images": {
+      "type": "media",
+      "multiple": true,
+      "required": false,
       "allowedTypes": [
         "files",
         "images"
-      ],
-      "type": "media",
-      "multiple": true
+      ]
     }
   }
 }

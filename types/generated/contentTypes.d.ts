@@ -473,6 +473,8 @@ export interface PluginUsersPermissionsUser
     posts: Schema.Attribute.Relation<'oneToMany', 'api::post.post'>;
     name: Schema.Attribute.String & Schema.Attribute.Required;
     lastName: Schema.Attribute.String & Schema.Attribute.Required;
+    lastName2: Schema.Attribute.String;
+    institution: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

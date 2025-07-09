@@ -84,6 +84,12 @@
     "lastName": {
       "type": "string",
       "required": true
+    },
+    "lastName2": {
+      "type": "string"
+    },
+    "institution": {
+      "type": "string"
     }
   }
 }
