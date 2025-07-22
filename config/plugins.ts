@@ -26,16 +26,31 @@ export default () => ({
     },
   },
   */
- email: {
+//  email: {
+//     config: {
+//       provider: 'nodemailer',
+//       providerOptions: {
+//         host: 'localhost',
+//         port: 25,
+//         secure: false, // No usar SSL si usas postfix local
+//         tls: {
+//           rejectUnauthorized: false,
+//         },
+//       },
+//       settings: {
+//         defaultFrom: '"Proyecto Corredor Bioceánico" <proyectocb@corredor-bioceanico-tarapaca.cl>',
+//         defaultReplyTo: 'proyectocb@corredor-bioceanico-tarapaca.cl',
+//       },
+//     },
+//   },
+
+  email: {
     config: {
       provider: 'nodemailer',
       providerOptions: {
-        host: 'localhost',
-        port: 25,
-        secure: false, // No usar SSL si usas postfix local
-        tls: {
-          rejectUnauthorized: false,
-        },
+        sendmail: true,
+        newline: 'unix',
+        path: '/usr/bin/msmtp', // o '/usr/sbin/sendmail' según tu sistema
       },
       settings: {
         defaultFrom: '"Proyecto Corredor Bioceánico" <proyectocb@corredor-bioceanico-tarapaca.cl>',
@@ -43,6 +58,8 @@ export default () => ({
       },
     },
   },
+
+
   upload: {
     config: {
       provider: 'local',
