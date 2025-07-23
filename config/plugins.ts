@@ -50,7 +50,7 @@ export default () => ({
       providerOptions: {
         sendmail: true,
         newline: 'unix',
-        path: '/usr/bin/msmtp', // o '/usr/sbin/sendmail' según tu sistema
+        path: '/usr/sbin/sendmail', // o '/usr/sbin/sendmail' según tu sistema
       },
       settings: {
         defaultFrom: '"Proyecto Corredor Bioceánico" <proyectocb@corredor-bioceanico-tarapaca.cl>',
