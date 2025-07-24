@@ -13,7 +13,7 @@ export default () => ({
       },
       email: {
         confirmation: {
-          url: `${env('PUBLIC_URL')}/api/auth/email-confirmation`, // ← usa dominio público
+          url: `${env('SERVER_URL')}/api/auth/email-confirmation`, // ← usa dominio público
         },
       },
     },
