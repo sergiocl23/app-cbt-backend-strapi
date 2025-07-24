@@ -50,7 +50,7 @@ export default () => ({
       },
       email: {
         confirmation: {
-          url: env('CONFIRMATION_URL'),
+          url: `${env('SERVER_URL')}/api/auth/email-confirmation`,
         },
       },
     },
