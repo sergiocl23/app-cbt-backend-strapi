@@ -43,7 +43,13 @@ export default () => ({
 //       },
 //     },
 //   },
-
+  'users-permissions': {
+    config: {
+      register: {
+        emailConfirmation: true, // activa confirmación por email
+      },
+    },
+  },
   email: {
     config: {
       provider: 'nodemailer',
