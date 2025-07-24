@@ -48,6 +48,11 @@ export default () => ({
       register: {
         emailConfirmation: true, // activa confirmación por email
       },
+      email: {
+        confirmation: {
+          url: env('CONFIRMATION_URL'),
+        },
+      },
     },
   },
   email: {
