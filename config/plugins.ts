@@ -13,7 +13,7 @@ export default () => ({
       },
       email: {
         confirmation: {
-          url: `${env('SERVER_URL')}/api/auth/email-confirmation`, // ← usa dominio público
+          url: 'https://www.corredor-bioceanico-tarapaca.cl/api/auth/email-confirmation', // ← usa dominio público
         },
       },
     },
