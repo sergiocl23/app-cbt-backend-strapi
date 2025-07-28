@@ -1,12 +1,5 @@
 import { subHours } from 'date-fns';
 
-interface ForumPost {
-  body: string;
-  created_at: string;
-  topic?: { id: number; name: string };
-  users_permissions_user?: { id: number; username: string };
-}
-
 export default ({ strapi }) => ({
   async sendDailyNotifications() {
     //console.log(`\nprobando`);
@@ -18,7 +11,7 @@ export default ({ strapi }) => ({
         topic: true,
         users_permissions_user: true,
       },
-    }) as ForumPost[]; // 👈 Solución rápida para evitar error con .forEach
+    }) as any[]; // 👈 Solución rápida para evitar error con .forEach
     
     
     // 2. Mapear usuario -> [topics]
@@ -72,7 +65,7 @@ export default ({ strapi }) => ({
           const topicName = post.topic?.name || 'Tópico sin nombre';
           if (!groupedByTopic[topicName]) groupedByTopic[topicName] = [];
           groupedByTopic[topicName].push({
-            author: post.users_permissions_user?.username+' '+post.users_permissions_user?.lastname+' '+post.users_permissions_user?.lastname2+' - '+post.users_permissions_user?.institution || 'Desconocido',
+            author: post.users_permissions_user?.name+' '+post.users_permissions_user?.lastname+' '+post.users_permissions_user?.lastname2+' - '+post.users_permissions_user?.institution || 'Desconocido',
             body: post.body,
             date: post.created_at,
           });
