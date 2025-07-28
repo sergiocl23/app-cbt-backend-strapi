@@ -65,7 +65,7 @@ export default ({ strapi }) => ({
           const topicName = post.topic?.name || 'Tópico sin nombre';
           if (!groupedByTopic[topicName]) groupedByTopic[topicName] = [];
           groupedByTopic[topicName].push({
-            author: post.users_permissions_user?.name+' '+post.users_permissions_user?.lastname+' '+post.users_permissions_user?.lastname2+' - '+post.users_permissions_user?.institution || 'Desconocido',
+            author: post.users_permissions_user?.name+' '+post.users_permissions_user?.lastName+' '+post.users_permissions_user?.lastName2+' - '+post.users_permissions_user?.institution || 'Desconocido',
             body: post.body,
             date: post.created_at,
           });
