@@ -1,12 +1,12 @@
 export default {
   routes: [
     {
-      method: 'GET',
-      path: '/notifications/send-daily',
-      handler: 'notification.sendDailyTopicNotifications',
+      method: 'POST',
+      path: '/topic/send-notifications',
+      handler: 'notifications.sendNotifications',
       config: {
         policies: [],
-        auth: false,
+        middlewares: [],
       },
     },
   ],
