@@ -66,7 +66,7 @@ export default {
       strapi.log.info('[CRON] Iniciando envío automático de notificaciones del foro...');
 
       try {
-        const res = await fetch(process.env.PUBLIC_URL + '/api/topic/send-notifications', {
+        const res = await fetch(process.env.PUBLIC_URL + '/api/topic/notifications/new-comments', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

@@ -2,7 +2,7 @@ export default {
   routes: [
     {
       method: 'POST',
-      path: '/topic/send-notifications',
+      path: '/topic/notifications/new-comments',
       handler: 'notifications.sendNotifications',
       config: {
         policies: [],
