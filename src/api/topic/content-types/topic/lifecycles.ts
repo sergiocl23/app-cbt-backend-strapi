@@ -1,22 +1,24 @@
-import { factories } from '@strapi/strapi';
-
-export default factories.createCoreService('api::topic.topic', ({ strapi }) => ({
-  async afterCreate(event) {
-    const topic = event.result;
+export default {
+  async afterCreate(event: any) {
+    const createdTopic = event.result;
 
     try {
-      // Encuentra los usuarios que deben recibir la notificación
-      const users = await strapi.entityService.findMany('plugin::users-permissions.user', {
-        // Personaliza esta lógica según tu necesidad: puedes usar roles, tags, etc.
-        filters: { 
-            confirmed: true 
-        },
+      // Volver a obtener el topic, pero con el usuario populado
+      const topic = await strapi.entityService.findOne('api::topic.topic', createdTopic.id, {
+        populate: ['users_permissions_user'], // Aquí el nombre de la relación con el usuario
       });
 
-      // Llama al servicio de notificación
+      // Obtener todos los usuarios confirmados
+      const users = await strapi.entityService.findMany('plugin::users-permissions.user', {
+        filters: { confirmed: true },
+      });
+
+      // Enviar correos de notificación
       await strapi.service('api::topic.notifications').sendNewTopicNotifications(users, topic);
+      console.log('✅ Notificaciones enviadas para nuevo tópico');
     } catch (err) {
-      strapi.log.error('Error al enviar notificaciones de nuevo tópico:', err);
+      console.error('❌ Error al enviar notificaciones de nuevo tópico:', err);
     }
   },
-}));
+};
+
