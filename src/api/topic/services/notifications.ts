@@ -72,14 +72,14 @@ export default ({ strapi }) => ({
           const topicName = post.topic?.name || 'Tópico sin nombre';
           if (!groupedByTopic[topicName]) groupedByTopic[topicName] = [];
           groupedByTopic[topicName].push({
-            author: post.users_permissions_user?.username || 'Desconocido',
+            author: post.users_permissions_user?.username+' '+post.users_permissions_user?.lastname+' '+post.users_permissions_user?.lastname2+' - '+post.users_permissions_user?.institution || 'Desconocido',
             body: post.body,
             date: post.created_at,
           });
         });
 
         let html = `<p>Hola ${user.name},</p>`;
-        html += `<p>Estos son los nuevos comentarios en los tópicos en los que has participado en las últimas 24 horas:</p>`;
+        html += `<p>Han habido nuevos comentarios en los tópicos en los que has participado:</p>`;
         //console.log(`\nprobando 6`);
         for (const [topic, comments] of Object.entries(groupedByTopic)) {
             //console.log(`\n${comments}`);
