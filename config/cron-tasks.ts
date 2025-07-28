@@ -56,7 +56,39 @@ export default {
       tz: 'America/Santiago',
       onInit: false
     }
-  }
+  },
+
+  /**
+   * Envío automático de notificaciones del foro a las 08:00 AM todos los días
+   */
+  autoSendForumNotifications: {
+    task: async ({ strapi }) => {
+      strapi.log.info('[CRON] Iniciando envío automático de notificaciones del foro...');
+
+      try {
+        const res = await fetch(process.env.PUBLIC_URL + '/api/topic/send-notifications', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            // Agrega el token si es necesario para proteger el endpoint
+            // 'Authorization': 'Bearer TU_TOKEN_AQUI'
+          }
+        });
+
+        const result = await res.json();
+        strapi.log.info('[CRON] Notificaciones enviadas correctamente: ' + JSON.stringify(result));
+      } catch (error) {
+        strapi.log.error('[CRON] Error al enviar notificaciones del foro:', error);
+        strapi.log.error('[CRON] Stack trace:', error.stack);
+        strapi.log.error('[CRON] Timestamp:', new Date().toISOString());
+      }
+    },
+    options: {
+      rule: '0 8 * * *', // Todos los días a las 08:00
+      tz: 'America/Santiago',
+      onInit: false
+    }
+  },
 
   
 }; 
