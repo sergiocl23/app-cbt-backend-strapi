@@ -2,7 +2,7 @@ export default {
   async sendNotifications(ctx) {
     try {
       const results = await strapi
-        .service('api::topic.topic')
+        .service('api::topic.notifications')
         .sendDailyNotifications();
 
       ctx.send({ message: 'Notificaciones enviadas', data: results });
