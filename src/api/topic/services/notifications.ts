@@ -1,152 +1,51 @@
-import { subHours } from 'date-fns';
+import { formatDistanceToNow, subHours } from 'date-fns';
 
 export default ({ strapi }) => ({
   async sendNewCommentsNotifications() {
     const yesterday = subHours(new Date(), 24);
 
-    // 1. Obtener todos los posts con info del topic y del autor
-    const posts = await strapi.db.query('api::post.post').findMany({
-      populate: {
-        topic: true,
-        users_permissions_user: true,
+    const users = await strapi.db.query('plugin::users-permissions.user').findMany({
+      where: {
+        blocked: false,
+        confirmed: true,
       },
-    }) as any[]; // 👈 Solución rápida para evitar error con .forEach
-    
-    
-    // 2. Mapear usuario -> [topics]
-    const userTopicsMap = {};
-    
-    posts.forEach(post => {
-      const userId = post.users_permissions_user?.id;
-      const topicId = post.topic?.id;
-      if (userId && topicId) {
-        if (!userTopicsMap[userId]) userTopicsMap[userId] = new Set();
-        userTopicsMap[userId].add(topicId);
-      }
+      populate: {
+        posts: {
+          populate: {
+            topic: true,
+          },
+        },
+      },
     });
 
-    const notifications = [];
+    // Mapa de tópicos por usuario con su último comentario
+    const userTopicsMap = new Map<number, { [topicId: number]: any }>();
 
-    // 3. Para cada usuario, revisar si hay nuevos comentarios en los tópicos
-    /*
-    for (const userId of Object.keys(userTopicsMap)) {
-      const topicIds = Array.from(userTopicsMap[userId]);
-
-      const user = await strapi.db.query('plugin::users-permissions.user').findOne({
-        where: { id: +userId },
-        select: ['email', 'username', 'name'],
-      });
-
-      const userPosts = await strapi.db.query('api::post.post').findMany({
-        where: {
-          topic: { id: topicIds },
-          users_permissions_user: { id: { $ne: +userId } },
-          created_at: { $gt: yesterday },
-        },
-        populate: {
-          topic: true,
-          users_permissions_user: true,
-        },
-      }) as any[]; // 👈 Solución rápida
-      
-      if (userPosts.length > 0) {
-        const groupedByTopic = {};
-        userPosts.forEach(post => {
-          const topicName = post.topic?.name || 'Tópico sin nombre';
-          if (!groupedByTopic[topicName]) groupedByTopic[topicName] = [];
-          groupedByTopic[topicName].push({
-            author: post.users_permissions_user?.name+' '+post.users_permissions_user?.lastName+' '+post.users_permissions_user?.lastName2+' - '+post.users_permissions_user?.institution || 'Desconocido',
-            body: post.body,
-            date: post.created_at,
-          });
-        });
-
-        let html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-            <h2 style="color: #333;">Hola ${user.name},</h2>
-            <p style="font-size: 16px; color: #555;">
-              Han habido nuevos comentarios en los tópicos en los que has participado:
-            </p>
-        `;
-
-        for (const [topic, comments] of Object.entries(groupedByTopic)) {
-          html += `
-            <div style="margin-top: 30px; padding: 15px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px;">
-              <h3 style="color: #005fa3; margin-bottom: 10px;">${topic}</h3>
-              <ul style="padding-left: 20px; color: #444;">
-          `;
-          // @ts-ignore:
-          comments.forEach(comment => {
-            html += `
-              <li style="margin-bottom: 10px;">
-                <p style="margin: 0;">
-                  <strong>${comment.author}</strong> comentó:
-                </p>
-                <p style="margin: 5px 0 0 0; font-style: italic;">"${comment.body}"</p>
-              </li>
-            `;
-          });
-
-          html += `
-              </ul>
-            </div>
-          `;
+    for (const user of users) {
+      const topicMap: { [topicId: number]: any } = {};
+      for (const post of user.posts || []) {
+        const topicId = post.topic?.id;
+        if (topicId) {
+          const existing = topicMap[topicId];
+          if (!existing || new Date(post.createdAt) > new Date(existing.createdAt)) {
+            topicMap[topicId] = post;
+          }
         }
-
-        html += `
-            <div style="margin-top: 40px; text-align: center;">
-              <p style="font-size: 16px; color: #333;">Puedes ver más detalles iniciando sesión en la plataforma:</p>
-              <a href="https://www.corredor-bioceanico-tarapaca.cl" 
-                style="display: inline-block; margin-top: 10px; padding: 12px 24px; background-color: #005fa3; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                Ingresar a la Plataforma
-              </a>
-            </div>
-
-            <p style="margin-top: 40px; font-size: 14px; color: #888;">
-              Gracias por ser parte del foro del Corredor Bioceánico Tarapacá.
-            </p>
-          </div>
-        `;
-
-        await strapi.plugin('email').service('email').send({
-          to: user.email,
-          subject: 'Nuevos comentarios en el foro',
-          html: html,
-        });
-
-        notifications.push({ user: user.email, topics: Object.keys(groupedByTopic) });
       }
+      userTopicsMap.set(user.id, topicMap);
     }
-    */
-    /**************************/
-    for (const userId of Object.keys(userTopicsMap)) {
-      const topicIds = Array.from(userTopicsMap[userId]);
 
-      const user = await strapi.db.query('plugin::users-permissions.user').findOne({
-        where: { id: +userId },
-        select: ['email', 'username', 'name'],
-      });
+    for (const user of users) {
+      const userId = user.id;
+      const topicMap = userTopicsMap.get(userId) || {};
 
-      const groupedByTopic = {};
-
-      for (const topicId of topicIds) {
-        // Obtener el último post del usuario en este tópico
-        const lastUserPost = await strapi.db.query('api::post.post').findOne({
-          where: {
-            topic: { id: topicId },
-            users_permissions_user: { id: +userId },
-          },
-          orderBy: { createdAt: 'desc' },
-        });
-
-        const afterDate = lastUserPost?.createdAt ?? new Date(0); // Si nunca escribió, obtener todo desde el inicio
-
-        // Obtener nuevos comentarios hechos por otros usuarios después de su último comentario
-        const after = afterDate > yesterday ? afterDate : yesterday;
+      for (const topicId of Object.keys(topicMap)) {
+        const lastUserPost = topicMap[+topicId];
+        const after = lastUserPost?.createdAt ?? yesterday;
 
         const newPosts = await strapi.db.query('api::post.post').findMany({
           where: {
-            topic: { id: topicId },
+            topic: { id: +topicId },
             users_permissions_user: { id: { $ne: +userId } },
             created_at: { $gt: after },
           },
@@ -156,82 +55,36 @@ export default ({ strapi }) => ({
           },
         }) as any[];
 
-        if (newPosts.length > 0) {
-          const topic = newPosts[0].topic?.name || 'Tópico sin nombre';
-          if (!groupedByTopic[topic]) groupedByTopic[topic] = [];
+        if (newPosts.length === 0) continue;
 
-          newPosts.forEach(post => {
-            groupedByTopic[topic].push({
-              author: post.users_permissions_user?.name + ' ' +
-                      post.users_permissions_user?.lastName + ' ' +
-                      post.users_permissions_user?.lastName2 + ' - ' +
-                      post.users_permissions_user?.institution || 'Desconocido',
-              body: post.body,
-              date: post.createdAt,
-            });
-          });
-        }
-      }
-
-      if (Object.keys(groupedByTopic).length > 0) {
-        // ✉️ Mismo HTML que ya usas
-        let html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f9f9f9;">
-            <h2 style="color: #333;">Hola ${user.name},</h2>
-            <p style="font-size: 16px; color: #555;">
-              Han habido nuevos comentarios en los tópicos en los que has participado:
-            </p>
-        `;
-
-        for (const [topic, comments] of Object.entries(groupedByTopic)) {
-          html += `
-            <div style="margin-top: 30px; padding: 15px; background-color: #ffffff; border: 1px solid #ddd; border-radius: 8px;">
-              <h3 style="color: #005fa3; margin-bottom: 10px;">${topic}</h3>
-              <ul style="padding-left: 20px; color: #444;">
-          `;
-          // @ts-ignore
-          comments.forEach(comment => {
-            html += `
-              <li style="margin-bottom: 10px;">
-                <p style="margin: 0;"><strong>${comment.author}</strong> comentó:</p>
-                <p style="margin: 5px 0 0 0; font-style: italic;">"${comment.body}"</p>
-              </li>
-            `;
-          });
-
-          html += `
-              </ul>
-            </div>
-          `;
-        }
-
-        html += `
-            <div style="margin-top: 40px; text-align: center;">
-              <p style="font-size: 16px; color: #333;">Puedes ver más detalles iniciando sesión en la plataforma:</p>
-              <a href="https://www.corredor-bioceanico-tarapaca.cl" 
-                style="display: inline-block; margin-top: 10px; padding: 12px 24px; background-color: #005fa3; color: #fff; text-decoration: none; border-radius: 6px; font-weight: bold;">
-                Ingresar a la Plataforma
-              </a>
-            </div>
-
-            <p style="margin-top: 40px; font-size: 14px; color: #888;">
-              Gracias por ser parte del foro del Corredor Bioceánico Tarapacá.
-            </p>
+        const html = `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2>Nuevo comentario en un tema que sigues</h2>
+            <p>Han respondido en el tema: <strong>${newPosts[0].topic.title}</strong></p>
+            <ul>
+              ${newPosts
+                .map(post => `<li><strong>${post.users_permissions_user.username}</strong>: ${post.content}</li>`)
+                .join('')}
+            </ul>
+            <p><a href="https://www.corredor-bioceanico-tarapaca.cl/topics/${topicId}">Ver tema</a></p>
           </div>
         `;
 
-        await strapi.plugin('email').service('email').send({
-          to: user.email,
-          subject: 'Nuevos comentarios en el foro',
-          html: html,
-        });
+        try {
+          await strapi.plugins['email'].services.email.send({
+            to: user.email,
+            subject: 'Nuevo comentario en un tema que sigues',
+            html,
+          });
 
-        notifications.push({ user: user.email, topics: Object.keys(groupedByTopic) });
+          console.log(
+            `✅ Notificación enviada a ${user.email} por ${newPosts.length} nuevo(s) comentario(s) en el tópico ${topicId}`
+          );
+        } catch (err) {
+          console.error(`❌ Error al enviar correo a ${user.email}:`, err);
+        }
       }
     }
-
-    /**************************/
-    return notifications;
   },
   
   async sendNewTopicNotifications(users, topic) {
