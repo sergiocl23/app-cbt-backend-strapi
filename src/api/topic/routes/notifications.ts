@@ -6,7 +6,7 @@ export default {
       handler: 'notifications.sendNewCommentsNotifications',
       config: {
         policies: [],
-        middlewares: [],
+        auth: false,
       },
     },
     {

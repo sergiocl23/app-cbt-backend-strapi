@@ -61,7 +61,7 @@ export default {
   /**
    * Envío automático de notificaciones del foro a las 08:00 AM todos los días
    */
-  autoSendForumNotifications: {
+  autoSendNewCommentsNotifications: {
     task: async ({ strapi }) => {
       strapi.log.info('[CRON] Iniciando envío automático de notificaciones del foro...');
 
@@ -84,7 +84,7 @@ export default {
       }
     },
     options: {
-      rule: '0 8 * * *', // Todos los días a las 08:00
+      rule: '0 11 * * *', // Todos los días a las 08:00
       tz: 'America/Santiago',
       onInit: false
     }
