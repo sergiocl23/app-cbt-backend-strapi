@@ -84,7 +84,7 @@ export default {
       }
     },
     options: {
-      rule: '0 11 * * *', // Todos los días a las 08:00
+      rule: '0 8 * * *', // Todos los días a las 08:00
       tz: 'America/Santiago',
       onInit: false
     }
