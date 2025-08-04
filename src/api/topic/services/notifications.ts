@@ -296,7 +296,7 @@ export default ({ strapi }) => ({
 
       for (const topicId of Object.keys(topicMap)) {
         const lastUserPost = topicMap[+topicId];
-        const after = lastUserPost?.createdAt ?? yesterday;
+        const after = lastUserPost?.created_at ?? yesterday;
 
         // 4. Obtiene los nuevos posts hechos por otros usuarios después del último post del usuario actual
         const newPosts = await strapi.db.query('api::post.post').findMany({

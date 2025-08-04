@@ -5,6 +5,11 @@ export default {
         .service('api::topic.notifications')
         .sendNewCommentsNotifications();
 
+      if (!results || (Array.isArray(results) && results.length === 0)) {
+        ctx.send({ message: 'No hay comentarios nuevos que notificar' });
+        return;
+      }
+
       ctx.send({ message: 'Notificaciones enviadas', data: results });
     } catch (err) {
       ctx.status = 500;
