@@ -152,6 +152,9 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
               <p style="margin: 0; color: #666; font-size: 12px; font-family: Arial, sans-serif;">
                 Si prefieres no recibir más emails, puedes <a href="[UNSUBSCRIBE_LINK]" style="color: #36A9E1; text-decoration: none;">darte de baja aquí</a>.
               </p>
+              <div style="margin-top: 12px; text-align: center;">
+                <p style="font-size: 12px; color: #888;">En caso de detectar errores o requerir asistencia, puede comunicarse al correo <a href="mailto:scerdal@unap.cl">scerdal@unap.cl</a>.</p>
+              </div>
             </td>
           </tr>
           
