@@ -376,11 +376,11 @@ export default ({ strapi }) => ({
 
         // 8. Envía el correo
         try {
-          // await strapi.plugins['email'].services.email.send({
-          //   to: user.email,
-          //   subject: 'Nuevos comentarios en el foro',
-          //   html,
-          // });
+          await strapi.plugins['email'].services.email.send({
+            to: user.email,
+            subject: 'Nuevos comentarios en el foro',
+            html,
+          });
 
           // 9. Guarda información de la notificación enviada
           notifications.push({
