@@ -101,7 +101,7 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
               <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse: collapse;">
                 <tr>
                   <td width="170" style="text-align: left; vertical-align: middle;">
-                    <img src="http://localhost:1337/uploads/LOGO-GORE-TARAPACA-2.png" alt="Gobierno Regional de Tarapacá" style="width: 150px; height: auto;" />
+                    <img src="https://www.corredor-bioceanico-tarapaca.cl/assets/images/newsletter/LOGO-GORE-TARAPACA-2.png" alt="Gobierno Regional de Tarapacá" style="width: 150px; height: auto;" />
                   </td>
                   <td style="text-align: right; vertical-align: middle;">
                     <h1 style="margin: 0 0 5px 0; color: #ffffff; font-size: 22px; font-family: Arial, sans-serif; text-align: right;">

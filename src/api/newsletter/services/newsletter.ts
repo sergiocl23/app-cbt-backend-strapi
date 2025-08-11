@@ -742,9 +742,9 @@ export default ({ strapi }) => ({
         - Usuario: ${process.env.SMTP_USER}
         - Remitente: ${process.env.SMTP_FROM}`);
       
-      const publicUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
-      const logoPath = '/uploads/LOGO-GORE-TARAPACA-2.png';
-      console.log(`🔗 URL de logo: ${publicUrl}${logoPath}`);
+      const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
+      const logoPath = '/assets/images/newsletter/LOGO-GORE-TARAPACA-2.png';
+      console.log(`🔗 URL de logo: ${serverUrl}${logoPath}`);
       
       // Configurar opciones del email - Sin adjuntos
       const emailOptions = {
