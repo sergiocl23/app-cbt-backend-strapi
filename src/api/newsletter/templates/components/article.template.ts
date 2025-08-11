@@ -113,7 +113,7 @@ export const renderArticle = (noticia: any) => {
     // Validar imagen y obtener URL
     const getImageUrl = (noticia: any) => {
       const publicUrl = process.env.SERVER_URL || 'http://localhost:1337';
-      const defaultLogo = `${publicUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA-2.png`;
+      const defaultLogo = `${publicUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
       
       if (!noticia) return defaultLogo;
       
@@ -164,12 +164,12 @@ export const renderArticle = (noticia: any) => {
         console.error(`La URL de imagen no es válida: ${imageUrl}`, e);
         // Usar la imagen del logo como respaldo
         const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
-        imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA-2.png`;
+        imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
       }
     } else {
       console.log('No se encontró imagen para este artículo, usando logo como respaldo');
       const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
-      imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA-2.png`;
+      imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
     }
 
     // Construir URLs completas para enlaces a noticias
