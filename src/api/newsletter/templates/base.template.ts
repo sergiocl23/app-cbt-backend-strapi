@@ -150,7 +150,7 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
                 © ${new Date().getFullYear()} Corredor Bioceánico Tarapacá. Todos los derechos reservados.
               </p>
               <p style="margin: 0; color: #666; font-size: 12px; font-family: Arial, sans-serif;">
-                Si deseas dejar de recibir este newsletter, puedes <a href="${'https://www.corredor-bioceanico-tarapaca.cl/api/subscribers/unsubscribe?token='+subscriber.token}" style="color: #36A9E1; text-decoration: none;">anular tu suscripción aquí</a>.
+                Si deseas dejar de recibir este newsletter, puedes <a href="${'https://www.corredor-bioceanico-tarapaca.cl/news/unsubscribe-newsletter?token='+subscriber.token}" style="color: #36A9E1; text-decoration: none;">anular tu suscripción aquí</a>.
               </p>
               <div style="margin-top: 12px; text-align: center;">
                 <p style="font-size: 12px; color: #888;">En caso de detectar errores o requerir asistencia, puede comunicarse al correo <a href="mailto:scerdal@unap.cl">scerdal@unap.cl</a>.</p>

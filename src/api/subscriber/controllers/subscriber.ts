@@ -259,7 +259,14 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
         data: { isActive: false }
       });
 
-      return { message: "Has sido dado de baja del newsletter" };
+      // return { message: "Has sido dado de baja del newsletter" };
+      return {
+        data: subscriber,
+        meta: { 
+          message: 'Has sido dado de baja del newsletter',
+          status: 'success'
+        }
+      };
     } catch (error) {
       return ctx.badRequest('Error en desuscripción');
     }
