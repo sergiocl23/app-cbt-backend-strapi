@@ -13,6 +13,7 @@ import { factories } from '@strapi/strapi';
 import { format } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { renderNewsletter } from '../templates/base.template';
+import { Subscriber } from '../interfaces/newsletter';
 
 const { createCoreController } = factories;
 
@@ -141,7 +142,16 @@ module.exports = createCoreController('api::newsletter.newsletter', ({ strapi })
           
           // Generar html del newsletter
           console.log(`🖌️ Generando HTML del newsletter...`);
-          const htmlContent = renderNewsletter(noticiasPorPais, type, periodoTexto);
+
+          const { id, email, isActive, frequency, token } = subscriber;
+          const subscriberParam: Subscriber = {
+            id: Number(id), // Asegúrate de que sea un número
+            email: email ?? '', // Valor por defecto en caso de undefined
+            isActive: isActive ?? false,
+            frequency: frequency ?? 'weekly', // Valor por defecto si no está definido
+            token: token ?? '',
+          };
+          const htmlContent = renderNewsletter(noticiasPorPais, type, periodoTexto, subscriberParam);
           console.log(`✅ HTML generado (longitud: ${htmlContent.length} caracteres)`);
           
           // Crear contenido del email

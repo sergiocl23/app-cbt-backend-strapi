@@ -983,6 +983,7 @@ export interface ApiSubscriberSubscriber extends Struct.CollectionTypeSchema {
     lastNewsletterSent: Schema.Attribute.DateTime;
     frequency: Schema.Attribute.Enumeration<['weekly']> &
       Schema.Attribute.DefaultTo<'weekly'>;
+    token: Schema.Attribute.String;
     createdAt: Schema.Attribute.DateTime;
     updatedAt: Schema.Attribute.DateTime;
     publishedAt: Schema.Attribute.DateTime;

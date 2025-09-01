@@ -1,5 +1,5 @@
 import { renderArticle } from './components/article.template';
-import { NoticiasPorPais } from '../interfaces/newsletter';
+import { NoticiasPorPais, Subscriber } from '../interfaces/newsletter';
 
 /**
  * Plantilla principal del newsletter que utiliza la paleta de colores de Tarapacá, Chile
@@ -11,7 +11,7 @@ import { NoticiasPorPais } from '../interfaces/newsletter';
  * - Rojo:        #BE1622
  * - Azul marino: #202445
  */
-export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string, periodoTexto: string) => {
+export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string, periodoTexto: string, subscriber?: Subscriber) => {
   const renderSeccionPais = (noticias: any[], pais: string) => {
     if (!noticias || noticias.length === 0) return '';
 
@@ -150,7 +150,7 @@ export const renderNewsletter = (noticiasPorPais: NoticiasPorPais, type: string,
                 © ${new Date().getFullYear()} Corredor Bioceánico Tarapacá. Todos los derechos reservados.
               </p>
               <p style="margin: 0; color: #666; font-size: 12px; font-family: Arial, sans-serif;">
-                Si prefieres no recibir más emails, puedes <a href="[UNSUBSCRIBE_LINK]" style="color: #36A9E1; text-decoration: none;">darte de baja aquí</a>.
+                Si deseas dejar de recibir este newsletter, puedes <a href="${'https://www.corredor-bioceanico-tarapaca.cl/api/subscribers/unsubscribe?token='+subscriber.token}" style="color: #36A9E1; text-decoration: none;">anular tu suscripción aquí</a>.
               </p>
               <div style="margin-top: 12px; text-align: center;">
                 <p style="font-size: 12px; color: #888;">En caso de detectar errores o requerir asistencia, puede comunicarse al correo <a href="mailto:scerdal@unap.cl">scerdal@unap.cl</a>.</p>

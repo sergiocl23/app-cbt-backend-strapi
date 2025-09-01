@@ -1749,6 +1749,7 @@ const siteSelectors: SiteSelectors = {
     country: 'paraguay',
     priority: (url: string) => url.includes('bioceanico') ? 2 : 1
   },
+
   'rotabioceanicanews.com.br': {
     urlPatterns: [
       /^https?:\/\/(?:www\.)?rotabioceanicanews\.com\.br\/[\w-]+\/$/
@@ -1791,6 +1792,7 @@ const siteSelectors: SiteSelectors = {
       'div.cm-entry-summary p:nth-last-child(2)'
     ]
   },
+
   'rotabioceanica.com.br': {
     urlPatterns: [
       /^https?:\/\/(?:www\.)?rotabioceanica\.com\.br\/\d{4}\/\d{2}\/[\w-]+\/$/
@@ -1840,6 +1842,7 @@ const siteSelectors: SiteSelectors = {
       return null;
     }
   },
+
   // Tribuna do Pantanal (Brasil)
   'tribunadopantanal.com.br': {
     urlPatterns: [
@@ -1902,6 +1905,7 @@ const siteSelectors: SiteSelectors = {
       '.noreadme-audima'
     ]
   },
+
   // Correio do Estado - Brazil
   'correiodoestado.com.br': {
     urlPatterns: [
@@ -1940,6 +1944,7 @@ const siteSelectors: SiteSelectors = {
     },
     country: 'brasil'
   },
+
   'agroin.com.br': {
     urlPatterns: [/agroin\.com\.br/],
     title: ['h1.news-title'],
@@ -1958,6 +1963,7 @@ const siteSelectors: SiteSelectors = {
       return null;
     }
   },
+
   // Jujuy al Día
   'jujuyaldia.com.ar': {
     urlPatterns: [
@@ -1983,6 +1989,7 @@ const siteSelectors: SiteSelectors = {
     ],
     country: 'argentina'
   },
+  
   // Somos Jujuy Argentina
   'somosjujuy.com.ar': {
     urlPatterns: [

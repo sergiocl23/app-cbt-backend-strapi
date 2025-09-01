@@ -9,13 +9,21 @@ export default {
       }
     },
     {
-      method: 'POST',
-      path: '/subscribers/:id/unsubscribe',
+      method: 'GET',
+      path: '/subscribers/unsubscribe',
       handler: 'subscriber.unsubscribe',
       config: {
         auth: false
       }
     },
+    // {
+    //   method: 'POST',
+    //   path: '/subscribers/:id/unsubscribe',
+    //   handler: 'subscriber.unsubscribe',
+    //   config: {
+    //     auth: false
+    //   }
+    // },
     {
       method: 'GET',
       path: '/subscribers',

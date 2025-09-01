@@ -67,4 +67,5 @@ export interface Subscriber {
   email: string;
   isActive: boolean;
   frequency: string;
+  token: string;
 } 

@@ -39,6 +39,9 @@
         "weekly"
       ],
       "default": "weekly"
+    },
+    "token": {
+      "type": "string"
     }
   }
-} 
+}

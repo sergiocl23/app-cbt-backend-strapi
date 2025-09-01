@@ -6,6 +6,7 @@
 import { factories } from '@strapi/strapi';
 const { createCoreController } = factories;
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 
 module.exports = createCoreController('api::subscriber.subscriber', ({ strapi }) => ({
   async subscribe(ctx) {
@@ -163,6 +164,8 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
         pais,
         frequency: 'weekly'
       }));
+
+      const token = uuidv4();
       
       const subscriber = await strapi.entityService.create('api::subscriber.subscriber', {
         data: {
@@ -170,7 +173,8 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
           name,
           pais,
           frequency: 'weekly',
-          isActive: true
+          isActive: true,
+          token
         }
       });
 
@@ -220,18 +224,46 @@ module.exports = createCoreController('api::subscriber.subscriber', ({ strapi })
     }
   },
 
+  // async unsubscribe(ctx) {
+  //   const { id } = ctx.params;
+
+  //   try {
+  //     const updated = await strapi.entityService.update('api::subscriber.subscriber', id, {
+  //       data: { isActive: false }
+  //     });
+
+  //     return updated;
+  //   } catch (error) {
+  //     return ctx.badRequest('Error en desuscripción');
+  //   }
+  // },
+
   async unsubscribe(ctx) {
-    const { id } = ctx.params;
+    const { token } = ctx.request.query;
+
+    if (!token) {
+      return ctx.badRequest("Token is required");
+    }
 
     try {
-      const updated = await strapi.entityService.update('api::subscriber.subscriber', id, {
+      const subscriber = await strapi.db.query("api::subscriber.subscriber").findOne({
+        where: { token: token },
+      });
+  
+      if (!subscriber) {
+        return ctx.notFound("Invalid or expired token");
+      }
+  
+      await strapi.db.query("api::subscriber.subscriber").update({
+        where: { id: subscriber.id },
         data: { isActive: false }
       });
 
-      return updated;
+      return { message: "Has sido dado de baja del newsletter" };
     } catch (error) {
       return ctx.badRequest('Error en desuscripción');
     }
+
   },
 
   async find(ctx) {
