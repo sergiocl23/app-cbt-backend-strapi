@@ -112,7 +112,7 @@ export const renderArticle = (noticia: any) => {
     
     // Validar imagen y obtener URL
     const getImageUrl = (noticia: any) => {
-      const publicUrl = process.env.SERVER_URL || 'http://localhost:1337';
+      const publicUrl = process.env.SERVER_URL;
       const defaultLogo = `${publicUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
       
       if (!noticia) return defaultLogo;
@@ -163,12 +163,12 @@ export const renderArticle = (noticia: any) => {
       } catch (e) {
         console.error(`La URL de imagen no es válida: ${imageUrl}`, e);
         // Usar la imagen del logo como respaldo
-        const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
+        const serverUrl = process.env.SERVER_URL;
         imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
       }
     } else {
       console.log('No se encontró imagen para este artículo, usando logo como respaldo');
-      const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
+      const serverUrl = process.env.SERVER_URL;
       imageUrl = `${serverUrl}/assets/images/newsletter/LOGO-GORE-TARAPACA.png`;
     }
 
@@ -195,7 +195,7 @@ export const renderArticle = (noticia: any) => {
             console.error(`La URL no es válida incluso después de corrección: ${linkUrl}`);
             
             // Usar URL interna como respaldo
-            const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+            const baseUrl = process.env.PUBLIC_URL;
             
             linkUrl = `${baseUrl}/api/noticias/ver/${id}`;
             console.log(`Usando URL interna como respaldo: ${linkUrl}`);
@@ -206,7 +206,7 @@ export const renderArticle = (noticia: any) => {
     // Si no tiene URL externa (noticias manuales), generar enlace a la vista interna
     else {
       // Usar el valor de PUBLIC_URL o localhost por defecto
-      const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+      const baseUrl = process.env.PUBLIC_URL;
       
       linkUrl = `${baseUrl}/api/noticias/ver/${id}`;
       console.log(`Noticia manual: Generando enlace interno a ${linkUrl}`);

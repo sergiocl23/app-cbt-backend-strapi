@@ -1237,7 +1237,7 @@ export default factories.createCoreController('api::noticia.noticia', ({ strapi 
       }
 
       // Base URL para rutas relativas (útil si las URLs de las imágenes son relativas)
-      const baseUrl = process.env.PUBLIC_URL || 'http://localhost:1337';
+      const baseUrl = process.env.PUBLIC_URL;
 
       // Devolver siempre en formato JSON
       // Normalizar featuredImage

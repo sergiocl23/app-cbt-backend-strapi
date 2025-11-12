@@ -2,8 +2,8 @@ import cronTasks from "./cron-tasks";
 
 export default ({ env }) => ({
   host: env('HOST', '0.0.0.0'),
-  port: env.int('PORT', 1337),
-  url: env('PUBLIC_URL', 'http://localhost:1337'), // esta URL puede mantenerse igual si es para uso interno
+  port: env.int('PORT'),
+  url: env('PUBLIC_URL'), // esta URL puede mantenerse igual si es para uso interno
   app: {
     keys: env.array('APP_KEYS'),
   },

@@ -742,7 +742,7 @@ export default ({ strapi }) => ({
         - Usuario: ${process.env.SMTP_USER}
         - Remitente: ${process.env.SMTP_FROM}`);
       
-      const serverUrl = process.env.SERVER_URL || 'http://localhost:1337';
+      const serverUrl = process.env.SERVER_URL;
       const logoPath = '/assets/images/newsletter/LOGO-GORE-TARAPACA.png';
       console.log(`🔗 URL de logo: ${serverUrl}${logoPath}`);
       
